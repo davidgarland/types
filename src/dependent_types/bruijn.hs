@@ -146,9 +146,10 @@ infer g@(s, m) (Lam (Abs x t e)) = do
   Right . Pi $ Abs x t' et
 infer g@(s, m) (App a b) = do
   Abs x t e <- inferPi g a
-  bt <- infer g b
+  b' <- norm g b
+  bt <- infer g b'
   checkPasses bt t
-  Right $ subst b e
+  Right $ subst b' e
 infer g@(s, m) (Pi (Abs x t e)) = do
   t' <- norm g t
   tu <- inferUnv g t'
