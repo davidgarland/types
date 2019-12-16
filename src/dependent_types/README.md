@@ -14,22 +14,6 @@ from [this article,](http://math.andrej.com/2012/11/08/how-to-implement-dependen
 with a little bit of work to convert it to use de bruijn indices instead (hence
 the filenames.)
 
-## Pi Types
-
-Pi types are a generalization of function types-- in ML or Haskell one would
-write `a -> b` to mean a function from type `a` to type `b`. In a dependently
-typed system, this type is instead written `Πx: a. b`, where, as the notation
-suggests, `x` has the type `a` (`x : a`). The reason for this is to allow
-types which depend upon values; hence the name *dependent types*.
-
-## Sigma Types
-
-Sigma types are a generalization of tuples-- in ML or Haskell one would write
-`a * b` or `(a, b)` respectively to mean a product of the types `a` and `b`.
-Similar to Pi types, Sigma types take the form `Σx: a. b`; it is a tuple of
-two values, one of type `a` and one of type `b`, where the type `b` depends
-upon the value of `x`.
-
 ## Universes
 
 Some languages like to talk about types as first-class values, allowing you to
@@ -101,10 +85,25 @@ you can write functions like:
 id = λt: U0. λx: t. x
 ```
 
-which would be inferred to have the type:
+which may be applied to a type as the first argument; for instance, `id Int`
+reduces to `λx: Int. x`
 
-```
-id : Πt: U0. Πx: t. t
-```
+## Pi Types
 
-and called like, for instance, `id Int 5`.
+Pi types are a generalization of function types-- in ML or Haskell one would
+write `a -> b` to mean a function from type `a` to type `b`. In a dependently
+typed system, this type is instead written `Πx: a. b`, where, as the notation
+suggests, `x` has the type `a` (`x : a`). The reason for this is to allow
+types which depend upon values; hence the name *dependent types*.
+
+Given the `id` example from earlier, we can write its type as
+`Πt: U0. Πx: t. t`. As you can see, the type of the identity function depends
+upon the value of `t`, which will be a type.
+
+## Sigma Types
+
+Sigma types are a generalization of tuples-- in ML or Haskell one would write
+`a * b` or `(a, b)` respectively to mean a product of the types `a` and `b`.
+Similar to Pi types, Sigma types take the form `Σx: a. b`; it is a tuple of
+two values, one of type `a` and one of type `b`, where the type `b` depends
+upon the value of `x`.
