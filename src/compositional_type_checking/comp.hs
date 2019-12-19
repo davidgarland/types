@@ -18,11 +18,6 @@ import Control.Monad.Except
 import Control.Monad.State
 import Data.Maybe
 
--- Helper Functions
-
-tshow :: Show a => a -> T.Text
-tshow = T.pack . show
-
 -- Core
 
 data Nam =
@@ -34,30 +29,37 @@ data Exp
   | Lam Nam Exp
   | App Exp Exp
   | Let Nam Exp Exp
+  | Two Exp Exp
   | Num Int
 
 data Typ
   = Var Nam
   | Fun Typ Typ
+  | Tup Typ Typ
   | Con T.Text
   deriving (Eq)
 
 -- Show Instances
 
 instance Show Nam where
-  show (Nam t v) = T.unpack t ++ show v
+  show (Nam t v) = T.unpack t
 
 instance Show Exp where
   show (Ref x) = show x
   show (Lam x e) = "λ" ++ show x ++ ". " ++ show e
   show (App a b) = "(" ++ show a ++ ") " ++ show b
   show (Let x a b) = "let " ++ show x ++ " = " ++ show a ++ " in " ++ show b
+  show (Two a b) = "(" ++ show a ++ ", " ++ show b ++ ")"
   show (Num n) = show n
 
 instance Show Typ where
   show (Var x) = show x
   show (Fun a b) = show a ++ " -> " ++ show b
+  show (Tup a b) = "(" ++ show a ++ " * " ++ show b ++ ")"
   show (Con x) = T.unpack x
+
+tshow :: Show a => a -> T.Text
+tshow = T.pack . show
 
 -- Alpha-Renaming
 
@@ -78,25 +80,29 @@ rename r (App a b) = App (rename r a) (rename r b)
 rename r (Let x a b) =
   let r' = incNam x r in
   Let (getNam r' x) (rename r' a) (rename r' b)
+rename r (Two a b) =
+  Two (rename r a) (rename r b)
 rename r (Num n) = Num n
 
 -- Type Variables & Substitution
 
 itv :: Int -> Typ
-itv n = Var $ Nam (tshow n <> "t") 0
+itv n = Var $ Nam (T.pack (([1..] >>= flip replicateM ['a'..'z']) !! n)) 0
 
 ftv :: Typ -> S.Set Nam
 ftv (Var x) = S.singleton x
 ftv (Fun a b) = ftv a <> ftv b
+ftv (Tup a b) = ftv a <> ftv b
 ftv (Con _) = S.empty
+
+ftvDelta :: Delta -> S.Set Nam
+ftvDelta = foldMap ftv
 
 apply :: Subst -> Typ -> Typ
 apply s (Var x) = M.findWithDefault (Var x) x s
 apply s (Fun a b) = Fun (apply s a) (apply s b)
+apply s (Tup a b) = Tup (apply s a) (apply s b)
 apply s (Con x) = Con x
-
-ftvDelta :: Delta -> S.Set Nam
-ftvDelta = foldMap ftv
 
 applyDelta :: Subst -> Delta -> Delta
 applyDelta s = fmap (apply s)
@@ -127,25 +133,23 @@ doUnify t (Var v) = unify (Var v) t
 doUnify (Fun a b) (Fun a' b') = do
   doUnify a a'
   join $ unify <$> applySub b <*> applySub b'
+doUnify (Tup a b) (Tup a' b') = do
+  doUnify a a'
+  doUnify b b'
 doUnify (Con a) (Con b) =
   if a == b then
     pure ()
   else
     throwError $ "Types not equal: " <> tshow a <> " and " <> tshow b
-doUnify a b = throwError $ "Types not equal: " <> tshow a <> "and " <> tshow b
+doUnify a b = throwError $ "Types not equal: " <> tshow a <> " and " <> tshow b
 
 unify :: Typ -> Typ -> Infer ()
 unify l r = join $ doUnify <$> applySub l <*> applySub r
 
-fresh :: Infer Int
-fresh = do
-  (i, s) <- get
-  put (i + 1, s)
-  return i
-
 freshVar :: Infer Typ
 freshVar = do
-  i <- fresh
+  (i, s) <- get
+  put (i + 1, s)
   return $ itv i
 
 mergeDelta :: Delta -> Delta -> Infer Delta
@@ -154,7 +158,7 @@ mergeDelta da db = M.mergeA keep keep try da db where
   try = M.zipWithAMatched $ \v a b -> do
     unify a b
     b' <- applySub b
-    return b' -- TODO: is this right???
+    return b'
 
 reduceTyping :: Nam -> Typing -> Typing
 reduceTyping x (delta, tau) =
@@ -198,15 +202,23 @@ infer g (Let x a b) = do
   let exp_s = reduceTyping x exp_t
       g' = M.insert x exp_s g
   infer g' b
+infer g (Two a b) = do
+  (da, ta) <- infer g a
+  (db, tb) <- infer g b
+  (_, s) <- get
+  let da' = applyDelta s da
+      db' = applyDelta s db
+  dab <- mergeDelta da' db'
+  return (dab, Tup ta tb)
 infer g (Num n) = return $ (M.empty, Con "Int")
 
-test :: String -> Exp -> IO ()
-test n e = do
-  putStrLn $ " -- " ++ n ++ " --"
-  putStrLn $ "Raw:     " ++ show e
-  putStrLn $ "Renamed: " ++ (show $ rename M.empty e)
-  let (Right (_, typ), (_, b)) = (runState . runExceptT $ infer M.empty e) (0, M.empty)
-  putStrLn $ "Inferred: " ++ show b ++ " |- " ++ show typ
+-- Main Program
+
+nam :: T.Text -> Nam
+nam x = Nam x 0
+
+ref :: T.Text -> Exp
+ref = Ref . nam
 
 eid :: Exp
 eid = Lam (Nam "x" 0) $ Ref (Nam "x" 0)
@@ -217,8 +229,22 @@ epid = Let (Nam "z" 0) eid $ Ref (Nam "z" 0)
 edollar :: Exp
 edollar = Lam (Nam "f" 0) $ Lam (Nam "x" 0) $ App (Ref (Nam "f" 0)) (Ref (Nam "x" 0))
 
+-- TODO: This should compile properly, but it seems to fail to generalize.
+ea :: Exp
+ea = Let (nam "id") eid $ Two (App (ref "id") (Num 0)) (App (ref "id") (ref "id"))
+
+test :: String -> Exp -> IO ()
+test n e = do
+  putStrLn $ " -- " ++ n ++ " --"
+  putStrLn $ "Input:    " ++ show e
+  case (runState . runExceptT $ infer M.empty e) (0, M.empty) of
+    (Right (_, typ), (_, b)) -> putStrLn $ "Inferred: " ++ show b ++ " |- " ++ show typ
+    (Left e, _) -> putStrLn $ T.unpack e
+
 main :: IO ()
 main = do
   test "id" eid
   test "pid" epid
   test "$" edollar
+  test "id id" (App eid (Num 0))
+  test "ea" ea
