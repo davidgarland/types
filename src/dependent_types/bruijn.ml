@@ -21,9 +21,9 @@ type nam <- string
 type exp_t 't =                           (* D ::=            *)
   | Ref of nam                            (* | x              *)
   | Idx of 't                             (* | #              *)
-  | Lam of nam      * exp_t 't * exp_t 't (* | λx: D. D        *)
+  | Lam of nam      * exp_t 't * exp_t 't (* | λx: D. D       *)
   | App of exp_t 't * exp_t 't            (* | D D            *)
-  | Pi  of nam      * exp_t 't * exp_t 't (* | Πx: D. D        *)
+  | Pi  of nam      * exp_t 't * exp_t 't (* | Πx: D. D       *)
   | Unv of int                            (* | U0, U1, U2, ...*)
 type exp <- exp_t int
 
