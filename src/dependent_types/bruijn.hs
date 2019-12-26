@@ -182,8 +182,9 @@ infer g@(s, m) (Tup (Abs x t b) a) = do
   t' <- norm g t
   _ <- inferUnv g t'
   at <- infer g a
+  checkPasses at t'
   bt <- infer (t' : s, m) b
-  Right . Sgm $ Abs x at bt
+  Right . Sgm $ Abs x t' bt
 infer g@(s, m) (Sgm (Abs x t e)) = do
   t' <- norm g t
   e' <- norm g e

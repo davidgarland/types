@@ -18,13 +18,15 @@ include import "prelude.ml"
 *)
 
 type nam <- string
-type exp_t 't =                           (* D ::=            *)
-  | Ref of nam                            (* | x              *)
-  | Idx of 't                             (* | #              *)
-  | Lam of nam      * exp_t 't * exp_t 't (* | λx: D. D       *)
-  | App of exp_t 't * exp_t 't            (* | D D            *)
-  | Pi  of nam      * exp_t 't * exp_t 't (* | Πx: D. D       *)
-  | Unv of int                            (* | U0, U1, U2, ...*)
+type exp_t 't =                                      (* D ::=            *)
+  | Ref of nam                                       (* | x              *)
+  | Idx of 't                                        (* | #              *)
+  | Lam of nam      * exp_t 't * exp_t 't            (* | λx: D. D       *)
+  | App of exp_t 't * exp_t 't                       (* | D D            *)
+  | Pi  of nam      * exp_t 't * exp_t 't            (* | Πx: D. D       *)
+  | Unv of int                                       (* | U0, U1, U2, ...*)
+  | Tup of nam      * exp_t 't * exp_t 't * exp_t 't (* | (x : D = D, D) *)
+  | Sgm of nam      * exp_t 't * exp_t 't            (* | Σx: D. D       *)
 type exp <- exp_t int
 
 (*
@@ -40,6 +42,9 @@ instance eq 't => eq (exp_t 't) begin
     | App (a, b), App (c, d) -> a == c && b == d
     | Pi (an, at, ae), Pi (bn, bt, be) -> an == bn && at == bt && ae == be
     | Unv a, Unv b -> a == b
+    | Tup (an, at, aa, ab), Tup (bn, bt, ba, bb) ->
+      an == bn && at == bt && aa == ba && ab == bb
+    | Sgm (an, at, ae), Sgm (bn, bt, be) -> an == bn && at == bt && ae == be
     | _, _ -> false
 end
 
@@ -47,21 +52,25 @@ instance show 'a => show (exp_t 'a) begin
   let show = function
     | Ref n         -> n
     | Idx i         -> show i
-    | Lam (_, t, e) -> "\\" ^ "[" ^ show t ^ "]. " ^ show e
+    | Lam (_, t, e) -> "\\" ^ show t ^ "]. " ^ show e
     | App (a, b)    -> "(" ^ show a ^ ") " ^ show b
-    | Pi (_, t, e)  -> "^" ^ "[" ^ show t ^ "]. " ^ show e
+    | Pi (_, t, e)  -> "^" ^ show t ^ ". " ^ show e
     | Unv u         -> "Set" ^ show u
+    | Tup (_, t, a, b) -> "(" ^ show a ^ ": " ^ show t ^ ", " ^ show b ^ ")"
+    | Sgm (_, t, e) -> "&" ^ show t ^ ". " ^ show e
 end
 
 instance functor exp_t begin
   let f <$> e =
     match e with
-    | Ref n         -> Ref n
-    | Idx i         -> Idx (f i)
-    | Lam (n, t, e) -> Lam (n, f <$> t, f <$> e)
-    | App (a, b)    -> App (f <$> a, f <$> b)
-    | Pi (n, t, e)  -> Pi  (n, f <$> t, f <$> e)
-    | Unv u         -> Unv u
+    | Ref n            -> Ref n
+    | Idx i            -> Idx (f i)
+    | Lam (n, t, e)    -> Lam (n, f <$> t, f <$> e)
+    | App (a, b)       -> App (f <$> a, f <$> b)
+    | Pi (n, t, e)     -> Pi  (n, f <$> t, f <$> e)
+    | Unv u            -> Unv u
+    | Tup (n, t, a, b) -> Tup (n, f <$> t, f <$> a, f <$> b)
+    | Sgm (n, t, e)    -> Sgm (n, f <$> t, f <$> e)
 end
 
 (*
@@ -77,12 +86,15 @@ let subst_var k w i =
     Idx i
 
 let rec subst_raw k w = function
-  | Ref n         -> Ref n
-  | Idx i         -> subst_var k w i
-  | Lam (n, t, e) -> Lam (n, subst_raw k w t, subst_raw (k + 1) w e)
-  | App (a, b)    -> App (subst_raw k w a, subst_raw k w b)
-  | Pi (n, t, e)  -> Pi  (n, subst_raw k w t, subst_raw (k + 1) w e)
-  | Unv u         -> Unv u
+  | Ref n            -> Ref n
+  | Idx i            -> subst_var k w i
+  | Lam (n, t, e)    -> Lam (n, subst_raw k w t, subst_raw (k + 1) w e)
+  | App (a, b)       -> App (subst_raw k w a, subst_raw k w b)
+  | Pi (n, t, e)     -> Pi  (n, subst_raw k w t, subst_raw (k + 1) w e)
+  | Unv u            -> Unv u
+  | Tup (n, t, a, b) ->
+    Tup (n, subst_raw k w t, subst_raw k w a, subst_raw (k + 1) w b)
+  | Sgm (n, t, e)    -> Sgm (n, subst_raw k w t, subst_raw (k + 1) w e)
 let subst = subst_raw 0
 
 (*
@@ -115,6 +127,17 @@ let rec norm (s, m) = function
       Right @@ Pi (n, t', e')
     end
   | Unv u -> Right @@ Unv u
+  | Tup (n, t, a, b) -> begin
+      with t' <- norm (s, m) t
+      with a' <- norm (s, m) a
+      with b' <- norm (s, m) b
+      Right @@ Tup (n, t', a', b')
+    end
+  | Sgm (n, t, e) -> begin
+      with t' <- norm (s, m) t
+      with e' <- norm (s, m) e
+      Right @@ Sgm (n, t', e')
+    end
 
 (*
 ** Type Inference + Checking
@@ -142,13 +165,14 @@ let rec infer (s, m) = function
     else
       Left @@ "Index out of bounds: " ^ show i
   | Lam (n, t, e) -> begin
-      with _ <- infer_unv (s, m) t
       with t' <- norm (s, m) t
+      with _ <- infer_unv (s, m) t'
       with et <- infer (t' :: s, m) e
       Right @@ Pi (n, t', et) 
     end
   | App (a, b) -> begin
-      with (_, t, e) <- infer_pi (s, m) a
+      with a' <- norm (s, m) a
+      with (_, t, e) <- infer_pi (s, m) a'
       with b' <- norm (s, m) b
       with bt <- infer (s, m) b'
       with _ <- check_passes bt t
@@ -161,6 +185,21 @@ let rec infer (s, m) = function
       Right @@ Unv @@ (if tu > eu then tu else eu)
     end
   | Unv u -> Right @@ Unv (u + 1)
+  | Tup (x, t, a, b) -> begin
+      with t' <- norm (s, m) t
+      with _ <- infer_unv (s, m) t'
+      with at <- infer (s, m) a
+      with _ <- check_passes at t'
+      with bt <- infer (s, m) b
+      Right @@ Sgm (x, t', bt)
+    end
+  | Sgm (_, t, e) -> begin
+      with t' <- norm (s, m) t
+      with e' <- norm (s, m) e
+      with tu <- infer_unv (s, m) t'
+      with eu <- infer_unv (s, m) e'
+      Right @@ Unv @@ (if tu > eu then tu else eu)
+    end
 and infer_unv (s, m) e = begin
     with t <- infer (s, m) e
     with t' <- norm (s, m) t
