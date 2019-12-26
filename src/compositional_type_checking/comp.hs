@@ -1,6 +1,7 @@
 {-
   An example implementation of compositional type elaboration, inference, and   
   checking.
+  
   The code here is largely adapted from the following article:
     https://hydraz.semi.works/posts/2019-01-28.html
   See also their full implementation, MLΔ:
