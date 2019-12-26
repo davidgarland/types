@@ -35,19 +35,27 @@ data ExpT a
   | App (ExpT a) (ExpT a)
   | Unv Int
   | Pi  (AbsT a)
+  | Tup (AbsT a) (ExpT a)
+  | Sgm (AbsT a)
   deriving (Eq, Functor)
 type Exp = ExpT Int
 
 instance Show a => Show (AbsT a) where
-  show (Abs x t e) = "[" ++ show t ++ "]. " ++ show e
+  show (Abs x (Lam a) e) = "(" ++ show (Lam a) ++ "). " ++ show e
+  show (Abs x (Pi a) e) = "(" ++ show (Pi a) ++ "). " ++ show e
+  show (Abs x t e) = show t ++ ". " ++ show e
 
 instance Show a => Show (ExpT a) where
   show (Ref n) = T.unpack n
   show (Idx i) = show i
-  show (Lam a) = "λ" ++ show a 
-  show (App a b) = "(" ++ show a ++ ") " ++ show b
+  show (Lam a) = "λ" ++ show a
+  show (App (Lam a) b) = "(" ++ show (Lam a) ++ ") " ++ show b
+  show (App a (App b c)) = show a ++ " (" ++ show (App b c) ++ ")"
+  show (App a b) = show a ++ " " ++ show b
   show (Pi  a) = "Π" ++ show a
   show (Unv u) = "Set" ++ show u
+  show (Tup (Abs _ t b) a) = "(" ++ show a ++ ": " ++ show t ++ ", " ++ show b ++ ")"
+  show (Sgm a) = "Σ" ++ show a
 
 -- Substitution
 
@@ -64,6 +72,10 @@ substRaw k w (App a b) =
 substRaw k w (Pi (Abs x t e)) =
   Pi (Abs x (substRaw k w t) (substRaw (k + 1) w e))
 substRaw k w (Unv u) = Unv u
+substRaw k w (Tup (Abs x t b) a) =
+  Tup (Abs x (substRaw k w t) (substRaw (k + 1) w t)) (substRaw k w a)
+substRaw k w (Sgm (Abs x t e)) =
+  Sgm (Abs x (substRaw k w t) (substRaw (k + 1) w e))
 
 subst :: Exp -> Exp -> Exp
 subst = substRaw 0
@@ -97,6 +109,15 @@ norm g (Pi (Abs x t e)) = do
   e' <- norm g e
   Right . Pi $ Abs x t' e'
 norm g (Unv u) = Right $ Unv u
+norm g (Tup (Abs x t b) a) = do
+  t' <- norm g t
+  a' <- norm g a
+  b' <- norm g b
+  Right $ Tup (Abs x t' b') a'
+norm g (Sgm (Abs x t e)) = do
+  t' <- norm g t
+  e' <- norm g e
+  Right . Sgm $ Abs x t' e'
 
 -- Type Passing
 
@@ -140,12 +161,13 @@ infer (s, _) (Idx i) =
   else
     Left $ "Index out of bounds: " <> tshow i
 infer g@(s, m) (Lam (Abs x t e)) = do
-  _ <- inferUnv g t
   t' <- norm g t
+  _ <- inferUnv g t'
   et <- infer (t' : s, m) e
   Right . Pi $ Abs x t' et
 infer g@(s, m) (App a b) = do
-  Abs x t e <- inferPi g a
+  a' <- norm g a
+  Abs x t e <- inferPi g a'
   b' <- norm g b
   bt <- infer g b'
   checkPasses bt t
@@ -156,6 +178,18 @@ infer g@(s, m) (Pi (Abs x t e)) = do
   eu <- inferUnv (t' : s, m) e
   Right . Unv $ max tu eu
 infer g (Unv u) = Right $ Unv (u + 1)
+infer g@(s, m) (Tup (Abs x t b) a) = do
+  t' <- norm g t
+  _ <- inferUnv g t'
+  at <- infer g a
+  bt <- infer (t' : s, m) b
+  Right . Sgm $ Abs x at bt
+infer g@(s, m) (Sgm (Abs x t e)) = do
+  t' <- norm g t
+  e' <- norm g e
+  tu <- inferUnv g t'
+  eu <- inferUnv g e'
+  Right . Unv $ max tu eu
 
 -- Examples
 
@@ -165,6 +199,10 @@ lam x t e = Lam $ Abs x t e
 pit :: T.Text -> Exp -> Exp -> Exp
 pit x t e = Pi  $ Abs x t e
 
+-- (x : T = a, b)
+tup :: T.Text -> Exp -> Exp -> Exp -> Exp
+tup x t a b = Tup (Abs x t b) a
+
 eid :: Exp
 eid = lam "t" (Unv 1) . lam "x" (Idx 0) $ (Idx 0)
 
@@ -173,6 +211,12 @@ edollar = lam "t" (Unv 1)
         . lam "f" (pit "y" (Idx 0) (Idx 1))
         . lam "x" (Idx 1) 
         $ App (Idx 1) (Idx 0)
+
+exy :: Exp
+exy = lam "t" (Unv 1)
+    . lam "x" (Idx 0)
+    . lam "y" (Idx 1)
+    $ tup "x" (Idx 2) (Idx 1) (Idx 1) 
 
 -- Main Program
 
@@ -188,3 +232,5 @@ main = do
   test "id Unv 0" gempty (App eid (Unv 0))
   test "$" gempty edollar
   test "$ Unv 0" gempty (App edollar (Unv 0))
+  test "xy" gempty exy
+  test "xy Unv 0" gempty (App exy (Unv 0))

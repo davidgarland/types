@@ -6,10 +6,11 @@ below for those who are interested.
 
 The files `bruijn.hs` and `bruijn.ml` are implementations of very basic
 dependent type systems written in Haskell and [Amulet](https://amulet.works)
-respectively. They both support Pi types and universes, but lack any sort of
-type variables or recursion-- any polymorphic functions would need to have
-types passed in explicitly. I also opted to not implement Sigma types yet,
-though that may be done later. The code for both versions is largely adapted
+respectively. They both support Pi types, Sigma types, and universes, but lack
+any sort of implicit type variables or recursion-- any polymorphic functions
+would need to have types passed in explicitly.
+
+The code for both versions is largely adapted
 from [this article,](http://math.andrej.com/2012/11/08/how-to-implement-dependent-type-theory-i/)
 with a little bit of work to convert it to use de bruijn indices instead (hence
 the filenames.)
