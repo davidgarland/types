@@ -253,7 +253,7 @@ test :: String -> Exp -> IO ()
 test n e = do
   putStrLn $ " -- " ++ n ++ " --"
   putStrLn $ "Input:    " ++ show e
-  case fst $ runInfer (Gamma M.empty) e of
+  case fst . runInfer (Gamma M.empty) $ rename M.empty e of
     Right t  -> putStrLn $ "Inferred: " ++ show t
     Left err -> putStrLn $ T.unpack err
 
