@@ -1,6 +1,6 @@
 {-
   An implementation of substitution, normalization via beta-reduction, and a
-  simple implementation of type inference (NOT normalization; in other words,
+  simple implementation of type inference (NOT elaboration; in other words,
   all lambdas are type-annotated) for dependent types.
 
   The code here is largely adapated from the following article:
