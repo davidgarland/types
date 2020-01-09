@@ -20,19 +20,19 @@ data Name
   = Name T.Text Int
   deriving (Eq, Ord)
 
-data Exp         -- e ::=
-  = Unit         -- | ()
-  | Ref Name     -- | x
-  | Lam Name Exp -- | λx. e
-  | App Exp  Exp -- | e e
-  | OfT Exp  Typ -- | (e : A)
+data Expr          -- e ::=
+  = Unit           -- | ()
+  | Ref  Name      -- | x
+  | Lam  Name Expr -- | λx. e
+  | App  Expr Expr -- | e e
+  | OfTy Expr Type -- | (e : A)
 
-data Typ         -- A, B, C ::=
-  = One          -- | 1
-  | Var Name     -- | a
-  | Exs Name     -- | ∃a
-  | For Name Typ -- | ∀a. A
-  | Fun Typ  Typ -- | A -> B
+data Type          -- A, B, C ::=
+  = One            -- | 1
+  | TVar Name      -- | a
+  | Exs  Name      -- | ∃a
+  | For  Name Type -- | ∀a. A
+  | Fun  Type Type -- | A -> B
 
 data CtxKind -- Γ, ∆, Θ ::= ·
   = Mono     -- | Γ, x : A
@@ -40,7 +40,7 @@ data CtxKind -- Γ, ∆, Θ ::= ·
   | Exst     -- | Γ, ∃a | Γ, ∃a = t
   | Mark     -- | Γ, ▶∃a
   deriving (Eq, Show)
-type Ctx = [((CtxKind, Name), Maybe Typ)]
+type Ctx = [((CtxKind, Name), Maybe Type)]
 
 type Infer t = ExceptT T.Text (State (Ctx, [Name])) t
 
@@ -49,16 +49,16 @@ type Infer t = ExceptT T.Text (State (Ctx, [Name])) t
 instance Show Name where
   show (Name n v) = T.unpack n
 
-instance Show Exp where
+instance Show Expr where
   show Unit = "()"
   show (Ref n) = show n
   show (Lam n e) = "λ" ++ show n ++ ". " ++ show e
   show (App a b) = show a ++ " " ++ show b
-  show (OfT e t) = "(" ++ show e ++ " : " ++ show t ++ ")"
+  show (OfTy e t) = "(" ++ show e ++ " : " ++ show t ++ ")"
 
-instance Show Typ where
+instance Show Type where
   show One = "()"
-  show (Var n) = show n
+  show (TVar n) = show n
   show (Exs n) = "∃" ++ show n
   show (For n t) = "∀" ++ show n ++ ". " ++ show t
   show (Fun a b) = show a ++ " -> " ++ show b
@@ -76,27 +76,27 @@ incNam n@(Name t _) r = let Name _ v' = getNam r n in M.insert t (v' + 1) r
 getNam :: Rnm -> Name -> Name
 getNam r (Name t _) = Name t $ M.findWithDefault 0 t r
 
-rename :: Rnm -> Exp -> Exp
+rename :: Rnm -> Expr -> Expr
 rename r Unit = Unit
 rename r (Ref x) = Ref $ getNam r x
 rename r (Lam x e) =
   let r' = incNam x r in
   Lam (getNam r' x) (rename r' e)
 rename r (App a b) = App (rename r a) (rename r b)
-rename r (OfT e t) = OfT (rename r e) t
+rename r (OfTy e t) = OfTy (rename r e) t
 
 -- Helper Functions
 
-ftv :: Typ -> S.Set Name
+ftv :: Type -> S.Set Name
 ftv One = S.empty
-ftv (Var x) = S.singleton x
+ftv (TVar x) = S.singleton x
 ftv (Exs x) = S.singleton x
 ftv (For x t) = x `S.delete` ftv t
 ftv (Fun a b) = ftv a <> ftv b
 
-subst :: Name -> Typ -> Typ -> Typ
+subst :: Name -> Type -> Type -> Type
 subst n w One = One
-subst n w (Var x) = if n == x then w else Var x
+subst n w (TVar x) = if n == x then w else TVar x
 subst n w (Exs x) = Exs x
 subst n w (For x t) = For x (subst n w t)
 subst n w (Fun a b) = Fun (subst n w a) (subst n w b)
@@ -139,19 +139,19 @@ ctxCut k n = do
   (c, _) <- get
   ctxDo . cut (k, n) $ "Failed to cut variable `" <> tshow k <> " "<> tshow n <> "` from `" <> tshow c <> "`."
 
-ctxInst :: CtxKind -> Name -> Typ -> Infer ()
+ctxInst :: CtxKind -> Name -> Type -> Infer ()
 ctxInst k n t = ctxDo . inst (k, n) (Just t) $ "Failed to instantiate variable `" <> tshow k <> " " <> tshow n <> "`."
 
 -- Context Querying
 
-ctxFind :: CtxKind -> Name -> Infer (Maybe Typ)
+ctxFind :: CtxKind -> Name -> Infer (Maybe Type)
 ctxFind k n = do
   (c, _) <- get
   maybe (throwError $ "Failed to find variable `" <> tshow k <> " " <> tshow n <> "`.") return $ L.lookup (k, n) c
 
-ctxHas :: Typ -> Infer ()
+ctxHas :: Type -> Infer ()
 ctxHas One = pure ()
-ctxHas (Var x) = ctxFind Poly x $> ()
+ctxHas (TVar x) = ctxFind Poly x $> ()
 ctxHas (Exs x) = ctxFind Exst x $> ()
 ctxHas (For x t) = do
   ctxAppend [((Poly, x), Nothing)]
@@ -173,51 +173,51 @@ ctxPrepend k n c' = do
 
 -- Context Application
 
-ctxApply :: Typ -> Infer Typ
+ctxApply :: Type -> Infer Type
 ctxApply One = pure One
-ctxApply (Var x) = pure $ Var x
+ctxApply (TVar x) = pure $ TVar x
 ctxApply (Exs x) = ctxFind Exst x >>= maybe (pure $ Exs x) ctxApply
 ctxApply (For x t) = For x <$> ctxApply t
 ctxApply (Fun a b) = Fun <$> ctxApply a <*> ctxApply b
 
 -- Main Judgements
 
-subtyp :: Typ -> Typ -> Infer ()
-subtyp One One = pure ()
-subtyp (Var a) (Var a')
+subtype :: Type -> Type -> Infer ()
+subtype One One = pure ()
+subtype (TVar a) (TVar a')
   | a == a' = ctxFind Poly a $> ()
   | otherwise =
     throwError $ "Failed to unify `" <> tshow a <> "` with `" <> tshow a' <> "`."
-subtyp (Exs a) (Exs a')
+subtype (Exs a) (Exs a')
   | a == a' = ctxFind Exst a $> ()
   | otherwise = do
     ctxHas (Exs a)
     ctxHas (Exs a')
     instLeft (Exs a) (Exs a')
-subtyp (Fun a a') (Fun b b') = do
-  subtyp b a
+subtype (Fun a a') (Fun b b') = do
+  subtype b a
   a'' <- ctxApply a'
   b'' <- ctxApply b'
-  subtyp a'' b''
-subtyp (For x a) b = do
+  subtype a'' b''
+subtype (For x a) b = do
   x' <- freshNam
   ctxAppend [((Exst, x'), Nothing), ((Mark, x'), Nothing)]
-  subtyp (subst x (Exs x') a) b
+  subtype (subst x (Exs x') a) b
   ctxCut Mark x'
-subtyp a (For x b) = do
+subtype a (For x b) = do
   ctxAppend [((Poly, x), Nothing)]
-  subtyp a b
+  subtype a b
   ctxCut Poly x
-subtyp (Exs x) b = do
+subtype (Exs x) b = do
   ctxHas (Exs x)
   errIf (x `S.member` ftv b) $ "Failed to unify `" <> tshow x <> "` with `" <> tshow b <> "`."
   instLeft (Exs x) b
-subtyp a (Exs x) = do
+subtype a (Exs x) = do
   ctxHas (Exs x)
   errIf (x `S.member` ftv a) $ "Failed to unify `" <> tshow x <> "` with `" <> tshow a <> "`."
   instRight a (Exs x)
 
-instLeft :: Typ -> Typ -> Infer ()
+instLeft :: Type -> Type -> Infer ()
 instLeft (Exs x) (Exs y) = ctxInst Exst y (Exs x)
 instLeft (Exs x) (Fun a b) = do
   x' <- freshNam
@@ -235,7 +235,7 @@ instLeft (Exs x) (For a t) = do
 instLeft (Exs x) y = ctxInst Exst x y
 instLeft x _ = throwError "Inexhaustive pattern in instLeft."
 
-instRight :: Typ -> Typ -> Infer ()
+instRight :: Type -> Type -> Infer ()
 instRight (Exs x) (Exs y) = ctxInst Exst x (Exs y)
 instRight (Fun a b) (Exs y) = do
   y' <- freshNam
@@ -246,7 +246,7 @@ instRight (Fun a b) (Exs y) = do
   b' <- ctxApply b
   instRight b' (Exs y'')
 instRight (For a t) (Exs y) = do
-  ctxHas (Var a)
+  ctxHas (TVar a)
   a' <- freshNam
   ctxAppend [((Mark, a'), Nothing), ((Exst, a'), Nothing)]
   instRight (subst y (Exs a') t) (Exs y) 
@@ -259,7 +259,7 @@ instRight t (Exs y) = do
   ctxInst Exst y t
 instRight _ _ = throwError "Inexhaustive pattern in instRight."
 
-check :: Exp -> Typ -> Infer ()
+check :: Expr -> Type -> Infer ()
 check Unit One = return ()
 check (Lam x e) (Fun a b) = do
   ctxAppend [((Mono, x), Just a)]
@@ -273,10 +273,10 @@ check e t = do
   et <- synth e
   et' <- ctxApply et
   t' <- ctxApply t
-  subtyp et' t'
+  subtype et' t'
 
-applyTyp :: Typ -> Exp -> Infer Typ
-applyTyp (Exs x) e = do
+applyType :: Type -> Expr -> Infer Type
+applyType (Exs x) e = do
   ctxHas (Exs x)
   x' <- freshNam
   x'' <- freshNam
@@ -284,15 +284,15 @@ applyTyp (Exs x) e = do
   ctxInst Exst x $ Fun (Exs x') (Exs x'')
   check e (Exs x')
   pure $ Exs x''
-applyTyp (Fun a b) e = do
+applyType (Fun a b) e = do
   check e a
   return b
-applyTyp (For a t) e = do
+applyType (For a t) e = do
   a' <- freshNam
   ctxAppend [((Exst, a'), Nothing)]
-  applyTyp (subst a (Exs a') t) e
+  applyType (subst a (Exs a') t) e
 
-synth :: Exp -> Infer Typ
+synth :: Expr -> Infer Type
 synth Unit = pure One
 synth (Ref x) = do
   t <- ctxFind Mono x
@@ -309,13 +309,13 @@ synth (Lam x e) = do
 synth (App a b) = do
   at <- synth a
   at' <- ctxApply at
-  applyTyp at' b
-synth (OfT e t) = do
+  applyType at' b
+synth (OfTy e t) = do
   ctxHas t
   check e t
   pure t
 
-infer :: Ctx -> Exp -> (Either T.Text Typ, (Ctx, [Name]))
+infer :: Ctx -> Expr -> (Either T.Text Type, (Ctx, [Name]))
 infer c e =
   let vs = ((flip Name $ 0) . T.pack) <$> ([1..] >>= flip replicateM ['a'..'z'])
   in (runState . runExceptT $ synth e) (c, vs)
@@ -325,19 +325,19 @@ infer c e =
 name :: T.Text -> Name
 name x = Name x 0
 
-var :: T.Text -> Typ
-var = Var . name
+tvar :: T.Text -> Type
+tvar = TVar . name
 
-ref :: T.Text -> Exp
+ref :: T.Text -> Expr
 ref = Ref . name
 
-lam :: T.Text -> Exp -> Exp
+lam :: T.Text -> Expr -> Expr
 lam n e = Lam (name n) e
 
-eid :: Exp
+eid :: Expr
 eid = lam "x" $ ref "x"
 
-test :: String -> Exp -> IO ()
+test :: String -> Expr -> IO ()
 test n e = do
   putStrLn $ " -- " ++ n ++ " --"
   putStrLn $ "Input:    " ++ show e
@@ -348,4 +348,4 @@ test n e = do
 
 main = do
   test "id" eid
-  test "poly id" (OfT eid (For (name "'t") (Fun (var "'t") (var "'t"))))
+  test "poly id" (OfTy eid (For (name "'t") (Fun (tvar "'t") (tvar "'t"))))
