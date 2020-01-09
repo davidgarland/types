@@ -12,9 +12,7 @@ import qualified Data.Set as S
 import qualified Data.List as L
 import Control.Monad.State
 import Control.Monad.Except
-import Control.Monad.ST
 import Data.Functor
-import Data.Maybe
 
 -- Core
 
@@ -35,7 +33,6 @@ data Typ        -- T ::=
   | Exs Nam     -- | ∃a
   | For Nam Typ -- | ∀a. T
   | Fun Typ Typ -- | T -> T
-  deriving (Eq)
 
 data CtxK
   = Mono -- Just Typ
