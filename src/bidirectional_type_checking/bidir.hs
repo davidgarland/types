@@ -35,7 +35,7 @@ data Typ         -- A, B, C ::=
   | Fun Typ  Typ -- | A -> B
 
 data CtxKind -- Γ, ∆, Θ ::= ·
-  = Mono     -- | x : A
+  = Mono     -- | Γ, x : A
   | Poly     -- | Γ, a
   | Exst     -- | Γ, ∃a | Γ, ∃a = t
   | Mark     -- | Γ, ▶∃a
