@@ -34,14 +34,13 @@ data Typ         -- T ::=
   | For Name Typ -- | ∀a. T
   | Fun Typ  Typ -- | T -> T
 
-data CtxK
+data CtxKind
   = Mono -- Just Typ
   | Poly -- Nothing
   | Exst -- Maybe Typ
   | Mark -- Nothing
   deriving (Eq, Show)
-type CtxE = ((CtxK, Name), Maybe Typ)
-type Ctx = [CtxE]
+type Ctx = [((CtxKind, Name), Maybe Typ)]
 
 type Infer t = ExceptT T.Text (State (Ctx, [Name])) t
 
@@ -135,17 +134,17 @@ ctxDo f = do
     Right c' -> put (c', v)
     Left e -> throwError e
 
-ctxCut :: CtxK -> Name -> Infer ()
+ctxCut :: CtxKind -> Name -> Infer ()
 ctxCut k n = do
   (c, _) <- get
   ctxDo . cut (k, n) $ "Failed to cut variable `" <> tshow k <> " "<> tshow n <> "` from `" <> tshow c <> "`."
 
-ctxInst :: CtxK -> Name -> Typ -> Infer ()
+ctxInst :: CtxKind -> Name -> Typ -> Infer ()
 ctxInst k n t = ctxDo . inst (k, n) (Just t) $ "Failed to instantiate variable `" <> tshow k <> " " <> tshow n <> "`."
 
 -- Context Querying
 
-ctxFind :: CtxK -> Name -> Infer (Maybe Typ)
+ctxFind :: CtxKind -> Name -> Infer (Maybe Typ)
 ctxFind k n = do
   (c, _) <- get
   maybe (throwError $ "Failed to find variable `" <> tshow k <> " " <> tshow n <> "`.") return $ L.lookup (k, n) c
@@ -165,7 +164,7 @@ ctxHas (Fun a b) = ctxHas a >> ctxHas b
 ctxAppend :: Ctx -> Infer ()
 ctxAppend c' = modify (\(c, vs) -> (c' ++ c, vs))
 
-ctxPrepend :: CtxK -> Name -> Ctx -> Infer ()
+ctxPrepend :: CtxKind -> Name -> Ctx -> Infer ()
 ctxPrepend k n c' = do
   (c, vs) <- get
   case L.break (\((ck, cn), cm) -> (ck, cn) == (k, n)) c of
