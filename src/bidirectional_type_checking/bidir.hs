@@ -16,23 +16,23 @@ import Data.Functor
 
 -- Core
 
-data Nam
-  = Nam T.Text Int
+data Name
+  = Name T.Text Int
   deriving (Eq, Ord)
 
-data Exp        -- e ::=
-  = Unt         -- | ()
-  | Ref Nam     -- | x
-  | Lam Nam Exp -- | λx. e
-  | App Exp Exp -- | e e
-  | OfT Exp Typ -- | (e : A)
+data Exp         -- e ::=
+  = Unit         -- | ()
+  | Ref Name     -- | x
+  | Lam Name Exp -- | λx. e
+  | App Exp  Exp -- | e e
+  | OfT Exp  Typ -- | (e : A)
 
-data Typ        -- T ::=
-  = One         -- | 1
-  | Var Nam     -- | a
-  | Exs Nam     -- | ∃a
-  | For Nam Typ -- | ∀a. T
-  | Fun Typ Typ -- | T -> T
+data Typ         -- T ::=
+  = One          -- | 1
+  | Var Name     -- | a
+  | Exs Name     -- | ∃a
+  | For Name Typ -- | ∀a. T
+  | Fun Typ  Typ -- | T -> T
 
 data CtxK
   = Mono -- Just Typ
@@ -40,18 +40,18 @@ data CtxK
   | Exst -- Maybe Typ
   | Mark -- Nothing
   deriving (Eq, Show)
-type CtxE = ((CtxK, Nam), Maybe Typ)
+type CtxE = ((CtxK, Name), Maybe Typ)
 type Ctx = [CtxE]
 
-type Infer t = ExceptT T.Text (State (Ctx, [Nam])) t
+type Infer t = ExceptT T.Text (State (Ctx, [Name])) t
 
 -- Show Instances
 
-instance Show Nam where
-  show (Nam n v) = T.unpack n
+instance Show Name where
+  show (Name n v) = T.unpack n
 
 instance Show Exp where
-  show Unt = "()"
+  show Unit = "()"
   show (Ref n) = show n
   show (Lam n e) = "λ" ++ show n ++ ". " ++ show e
   show (App a b) = show a ++ " " ++ show b
@@ -71,14 +71,14 @@ tshow = T.pack . show
 
 type Rnm = M.Map T.Text Int
 
-incNam :: Nam -> Rnm -> Rnm
-incNam n@(Nam t _) r = let Nam _ v' = getNam r n in M.insert t (v' + 1) r
+incNam :: Name -> Rnm -> Rnm
+incNam n@(Name t _) r = let Name _ v' = getNam r n in M.insert t (v' + 1) r
 
-getNam :: Rnm -> Nam -> Nam
-getNam r (Nam t _) = Nam t $ M.findWithDefault 0 t r
+getNam :: Rnm -> Name -> Name
+getNam r (Name t _) = Name t $ M.findWithDefault 0 t r
 
 rename :: Rnm -> Exp -> Exp
-rename r Unt = Unt
+rename r Unit = Unit
 rename r (Ref x) = Ref $ getNam r x
 rename r (Lam x e) =
   let r' = incNam x r in
@@ -86,37 +86,23 @@ rename r (Lam x e) =
 rename r (App a b) = App (rename r a) (rename r b)
 rename r (OfT e t) = OfT (rename r e) t
 
--- Monadic Functions
+-- Helper Functions
 
-class Substs s where
-  fvs :: s -> S.Set Nam
-  subst :: Nam -> s -> s -> s
+ftv :: Typ -> S.Set Name
+ftv One = S.empty
+ftv (Var x) = S.singleton x
+ftv (Exs x) = S.singleton x
+ftv (For x t) = x `S.delete` ftv t
+ftv (Fun a b) = ftv a <> ftv b
 
-instance Substs Exp where
-  fvs Unt = S.empty
-  fvs (Ref x) = S.singleton x
-  fvs (Lam x e) = x `S.delete` fvs e
-  fvs (App a b) = fvs a <> fvs b
-  fvs (OfT x t) = fvs x
-  subst n w Unt = Unt
-  subst n w (Ref x) = if n == x then w else Ref x
-  subst n w (Lam x e) = Lam x (subst n w e)
-  subst n w (App a b) = App (subst n w a) (subst n w b)
-  subst n w (OfT x t) = OfT (subst n w x) t
+subst :: Name -> Typ -> Typ -> Typ
+subst n w One = One
+subst n w (Var x) = if n == x then w else Var x
+subst n w (Exs x) = Exs x
+subst n w (For x t) = For x (subst n w t)
+subst n w (Fun a b) = Fun (subst n w a) (subst n w b)
 
-instance Substs Typ where
-  fvs One = S.empty
-  fvs (Var x) = S.singleton x
-  fvs (Exs x) = S.singleton x
-  fvs (For x t) = x `S.delete` fvs t
-  fvs (Fun a b) = fvs a <> fvs b
-  subst n w One = One
-  subst n w (Var x) = if n == x then w else Var x
-  subst n w (Exs x) = Exs x
-  subst n w (For x t) = For x (subst n w t)
-  subst n w (Fun a b) = Fun (subst n w a) (subst n w b)
-
-freshNam :: Infer Nam
+freshNam :: Infer Name
 freshNam = do
   (ctx, vs) <- get
   case vs of
@@ -128,7 +114,7 @@ freshNam = do
 errIf :: Bool -> T.Text -> Infer ()
 errIf c e = if c then throwError e else return ()
 
--- List Functions
+-- Context Cut / Instantiation
 
 cut :: Eq a => a -> e -> [(a, b)] -> Either e [(a, b)]
 cut k e ((x, _) : xs)
@@ -142,9 +128,24 @@ inst k v e ((x, y) : xys)
   | otherwise = ((x, y) :) <$> inst k v e xys
 inst k v e [] = Left e
 
--- Context Searching
+ctxDo :: (Ctx -> Either T.Text Ctx) -> Infer ()
+ctxDo f = do
+  (c, v) <- get
+  case f c of
+    Right c' -> put (c', v)
+    Left e -> throwError e
 
-ctxFind :: CtxK -> Nam -> Infer (Maybe Typ)
+ctxCut :: CtxK -> Name -> Infer ()
+ctxCut k n = do
+  (c, _) <- get
+  ctxDo . cut (k, n) $ "Failed to cut variable `" <> tshow k <> " "<> tshow n <> "` from `" <> tshow c <> "`."
+
+ctxInst :: CtxK -> Name -> Typ -> Infer ()
+ctxInst k n t = ctxDo . inst (k, n) (Just t) $ "Failed to instantiate variable `" <> tshow k <> " " <> tshow n <> "`."
+
+-- Context Querying
+
+ctxFind :: CtxK -> Name -> Infer (Maybe Typ)
 ctxFind k n = do
   (c, _) <- get
   maybe (throwError $ "Failed to find variable `" <> tshow k <> " " <> tshow n <> "`.") return $ L.lookup (k, n) c
@@ -164,29 +165,12 @@ ctxHas (Fun a b) = ctxHas a >> ctxHas b
 ctxAppend :: Ctx -> Infer ()
 ctxAppend c' = modify (\(c, vs) -> (c' ++ c, vs))
 
-ctxPrepend :: CtxK -> Nam -> Ctx -> Infer ()
+ctxPrepend :: CtxK -> Name -> Ctx -> Infer ()
 ctxPrepend k n c' = do
   (c, vs) <- get
   case L.break (\((ck, cn), cm) -> (ck, cn) == (k, n)) c of
     (a, b@(_ : _)) -> put (a ++ c' ++ b, vs)
     _ -> throwError $ "Failed to find variable `" <> tshow k <> " " <> tshow n <> "` in context for prepend."
-
--- Context Cutting / Instantiation
-
-ctxDo :: (Ctx -> Either T.Text Ctx) -> Infer ()
-ctxDo f = do
-  (c, v) <- get
-  case f c of
-    Right c' -> put (c', v)
-    Left e -> throwError e
-
-ctxCut :: CtxK -> Nam -> Infer ()
-ctxCut k n = do
-  (c, _) <- get
-  ctxDo . cut (k, n) $ "Failed to cut variable `" <> tshow k <> " "<> tshow n <> "` from `" <> tshow c <> "`."
-
-ctxInst :: CtxK -> Nam -> Typ -> Infer ()
-ctxInst k n t = ctxDo . inst (k, n) (Just t) $ "Failed to instantiate variable `" <> tshow k <> " " <> tshow n <> "`."
 
 -- Context Application
 
@@ -197,7 +181,7 @@ ctxApply (Exs x) = ctxFind Exst x >>= maybe (pure $ Exs x) ctxApply
 ctxApply (For x t) = For x <$> ctxApply t
 ctxApply (Fun a b) = Fun <$> ctxApply a <*> ctxApply b
 
--- a <= b
+-- Main Judgements
 
 subtyp :: Typ -> Typ -> Infer ()
 subtyp One One = pure ()
@@ -210,7 +194,7 @@ subtyp (Exs a) (Exs a')
   | otherwise = do
     ctxHas (Exs a)
     ctxHas (Exs a')
-    instl (Exs a) (Exs a') -- instl? instr?
+    instLeft (Exs a) (Exs a')
 subtyp (Fun a a') (Fun b b') = do
   subtyp b a
   a'' <- ctxApply a'
@@ -227,63 +211,57 @@ subtyp a (For x b) = do
   ctxCut Poly x
 subtyp (Exs x) b = do
   ctxHas (Exs x)
-  errIf (x `S.member` fvs b) $ "Failed to unify `" <> tshow x <> "` with `" <> tshow b <> "`."
-  instl (Exs x) b
+  errIf (x `S.member` ftv b) $ "Failed to unify `" <> tshow x <> "` with `" <> tshow b <> "`."
+  instLeft (Exs x) b
 subtyp a (Exs x) = do
   ctxHas (Exs x)
-  errIf (x `S.member` fvs a) $ "Failed to unify `" <> tshow x <> "` with `" <> tshow a <> "`."
-  instr a (Exs x)
+  errIf (x `S.member` ftv a) $ "Failed to unify `" <> tshow x <> "` with `" <> tshow a <> "`."
+  instRight a (Exs x)
 
--- a :=< b
-
-instl :: Typ -> Typ -> Infer ()
-instl (Exs x) (Exs y) = ctxInst Exst y (Exs x)
-instl (Exs x) (Fun a b) = do
+instLeft :: Typ -> Typ -> Infer ()
+instLeft (Exs x) (Exs y) = ctxInst Exst y (Exs x)
+instLeft (Exs x) (Fun a b) = do
   x' <- freshNam
   x'' <- freshNam
   ctxPrepend Exst x [((Exst, x''), Nothing), ((Exst, x'), Nothing)]
   ctxInst Exst x (Fun (Exs x') (Exs x''))
-  instr a (Exs x')
+  instRight a (Exs x')
   b' <- ctxApply b
-  instl (Exs x'') b'
-instl (Exs x) (For a t) = do
+  instLeft (Exs x'') b'
+instLeft (Exs x) (For a t) = do
   _ <- ctxFind Exst x
   ctxAppend [((Poly, a), Nothing)]
-  instl (Exs x) t 
+  instLeft (Exs x) t 
   ctxCut Poly a
-instl (Exs x) y = ctxInst Exst x y
-instl x _ = throwError "Inexhaustive pattern in instl."
+instLeft (Exs x) y = ctxInst Exst x y
+instLeft x _ = throwError "Inexhaustive pattern in instLeft."
 
--- a =:< b
-
-instr :: Typ -> Typ -> Infer ()
-instr (Exs x) (Exs y) = ctxInst Exst x (Exs y)
-instr (Fun a b) (Exs y) = do
+instRight :: Typ -> Typ -> Infer ()
+instRight (Exs x) (Exs y) = ctxInst Exst x (Exs y)
+instRight (Fun a b) (Exs y) = do
   y' <- freshNam
   y'' <- freshNam
   ctxPrepend Exst y [((Exst, y''), Nothing), ((Exst, y'), Nothing)]
   ctxInst Exst y (Fun (Exs y') (Exs y''))
-  instl (Exs y') a
+  instLeft (Exs y') a
   b' <- ctxApply b
-  instr b' (Exs y'')
-instr (For a t) (Exs y) = do
+  instRight b' (Exs y'')
+instRight (For a t) (Exs y) = do
   ctxHas (Var a)
   a' <- freshNam
   ctxAppend [((Mark, a'), Nothing), ((Exst, a'), Nothing)]
-  instr (subst y (Exs a') t) (Exs y) 
+  instRight (subst y (Exs a') t) (Exs y) 
   ctxCut Mark a'
-instr t (Exs y) = do
+instRight t (Exs y) = do
   (c, vs) <- get
   ctxCut Exst y
   ctxHas t
   put (c, vs)
   ctxInst Exst y t
-instr _ _ = throwError "Inexhaustive pattern in instr."
-
--- Type Checking
+instRight _ _ = throwError "Inexhaustive pattern in instRight."
 
 check :: Exp -> Typ -> Infer ()
-check Unt One = return ()
+check Unit One = return ()
 check (Lam x e) (Fun a b) = do
   ctxAppend [((Mono, x), Just a)]
   check e b
@@ -298,10 +276,8 @@ check e t = do
   t' <- ctxApply t
   subtyp et' t'
 
--- Type Application
-
-app :: Typ -> Exp -> Infer Typ
-app (Exs x) e = do
+applyTyp :: Typ -> Exp -> Infer Typ
+applyTyp (Exs x) e = do
   ctxHas (Exs x)
   x' <- freshNam
   x'' <- freshNam
@@ -309,18 +285,16 @@ app (Exs x) e = do
   ctxInst Exst x $ Fun (Exs x') (Exs x'')
   check e (Exs x')
   pure $ Exs x''
-app (Fun a b) e = do
+applyTyp (Fun a b) e = do
   check e a
   return b
-app (For a t) e = do
+applyTyp (For a t) e = do
   a' <- freshNam
   ctxAppend [((Exst, a'), Nothing)]
-  app (subst a (Exs a') t) e
-
--- Type Synthesis
+  applyTyp (subst a (Exs a') t) e
 
 synth :: Exp -> Infer Typ
-synth Unt = pure One
+synth Unit = pure One
 synth (Ref x) = do
   t <- ctxFind Mono x
   case t of
@@ -336,32 +310,30 @@ synth (Lam x e) = do
 synth (App a b) = do
   at <- synth a
   at' <- ctxApply at
-  app at' b
+  applyTyp at' b
 synth (OfT e t) = do
   ctxHas t
   check e t
   pure t
 
--- Type Inference
-
-infer :: Ctx -> Exp -> (Either T.Text Typ, (Ctx, [Nam]))
+infer :: Ctx -> Exp -> (Either T.Text Typ, (Ctx, [Name]))
 infer c e =
-  let vs = ((flip Nam $ 0) . T.pack) <$> ([1..] >>= flip replicateM ['a'..'z'])
+  let vs = ((flip Name $ 0) . T.pack) <$> ([1..] >>= flip replicateM ['a'..'z'])
   in (runState . runExceptT $ synth e) (c, vs)
 
 -- Examples
 
-nam :: T.Text -> Nam
-nam x = Nam x 0
+name :: T.Text -> Name
+name x = Name x 0
 
 var :: T.Text -> Typ
-var = Var . nam
+var = Var . name
 
 ref :: T.Text -> Exp
-ref = Ref . nam
+ref = Ref . name
 
 lam :: T.Text -> Exp -> Exp
-lam n e = Lam (nam n) e
+lam n e = Lam (name n) e
 
 eid :: Exp
 eid = lam "x" $ ref "x"
@@ -377,4 +349,4 @@ test n e = do
 
 main = do
   test "id" eid
-  test "poly id" (OfT eid (For (nam "'t") (Fun (var "'t") (var "'t"))))
+  test "poly id" (OfT eid (For (name "'t") (Fun (var "'t") (var "'t"))))
