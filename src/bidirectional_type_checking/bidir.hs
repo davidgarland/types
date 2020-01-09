@@ -27,18 +27,18 @@ data Exp         -- e ::=
   | App Exp  Exp -- | e e
   | OfT Exp  Typ -- | (e : A)
 
-data Typ         -- T ::=
+data Typ         -- A, B, C ::=
   = One          -- | 1
   | Var Name     -- | a
   | Exs Name     -- | ∃a
-  | For Name Typ -- | ∀a. T
-  | Fun Typ  Typ -- | T -> T
+  | For Name Typ -- | ∀a. A
+  | Fun Typ  Typ -- | A -> B
 
-data CtxKind
-  = Mono -- Just Typ
-  | Poly -- Nothing
-  | Exst -- Maybe Typ
-  | Mark -- Nothing
+data CtxKind -- Γ, ∆, Θ ::= ·
+  = Mono     -- | x : A
+  | Poly     -- | Γ, a
+  | Exst     -- | Γ, ∃a | Γ, ∃a = t
+  | Mark     -- | Γ, ▶∃a
   deriving (Eq, Show)
 type Ctx = [((CtxKind, Name), Maybe Typ)]
 
