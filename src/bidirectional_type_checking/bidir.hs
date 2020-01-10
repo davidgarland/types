@@ -184,16 +184,8 @@ ctxApply (Fun a b) = Fun <$> ctxApply a <*> ctxApply b
 
 subtype :: Type -> Type -> Infer ()
 subtype One One = pure ()
-subtype (TVar a) (TVar a')
-  | a == a' = ctxFind Poly a $> ()
-  | otherwise =
-    throwError $ "Failed to unify `" <> tshow a <> "` with `" <> tshow a' <> "`."
-subtype (Exs a) (Exs a')
-  | a == a' = ctxFind Exst a $> ()
-  | otherwise = do
-    ctxHas (Exs a)
-    ctxHas (Exs a')
-    instLeft (Exs a) (Exs a')
+subtype (TVar a) (TVar a') | a == a' = ctxFind Poly a $> ()
+subtype (Exs a) (Exs a') | a == a' = ctxFind Exst a $> ()
 subtype (Fun a a') (Fun b b') = do
   subtype b a
   a'' <- ctxApply a'
