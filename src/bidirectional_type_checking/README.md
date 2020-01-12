@@ -93,7 +93,7 @@ data Type          -- A, B, C ::=
 
 Next, they define a language of ordered contexts-- their definition as a BNF grammar isn't just for show,
 it actually defines more or less how they should work. Implementing contexts here as some myriad of hash maps
-and hash sets isn't possible here-- it needs to be a list, more or less.
+and hash sets isn't possible here-- it needs to be a list.
 
 - `·` denotes the empty context.
 - `Γ, a` extends the context with a forall-quantified type variable `a`.
