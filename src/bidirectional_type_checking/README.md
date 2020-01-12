@@ -19,7 +19,7 @@ simply run the synthesis judgement on your program to get an inferred and type-c
 ## This System
 
 This system in specific uses the paper
-[Complete And Easy Bidirectional Type-Checking For Higher-Rank Polymorphism](https://www.cl.cam.ac.uk/~nk480/bidir.pdf)
+[Complete and Easy Bidirectional Type-Checking for Higher-Rank Polymorphism](https://www.cl.cam.ac.uk/~nk480/bidir.pdf)
 by Dunfield and Krishnaswami.
 
 In their system, they add one additional "primary" judgement:
