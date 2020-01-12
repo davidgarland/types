@@ -111,7 +111,7 @@ freshNam = do
     _ -> throwError "Failed to generate a fresh name. Is the supply empty?"
 
 errIf :: Bool -> T.Text -> Infer ()
-errIf c e = if c then throwError e else return ()
+errIf c e = if c then throwError e else pure ()
 
 -- Context Cut / Instantiation
 
@@ -147,7 +147,7 @@ ctxInst k n t = ctxDo . inst (k, n) (Just t) $ "Failed to instantiate variable `
 ctxFind :: CtxKind -> Name -> Infer (Maybe Type)
 ctxFind k n = do
   (c, _) <- get
-  maybe (throwError $ "Failed to find variable `" <> tshow k <> " " <> tshow n <> "`.") return $ L.lookup (k, n) c
+  maybe (throwError $ "Failed to find variable `" <> tshow k <> " " <> tshow n <> "`.") pure $ L.lookup (k, n) c
 
 ctxHas :: Type -> Infer ()
 ctxHas One = pure ()
@@ -255,7 +255,7 @@ instRight t (Exs y) = do
 instRight _ _ = throwError "Inexhaustive pattern in instRight."
 
 check :: Expr -> Type -> Infer ()
-check Unit One = return ()
+check Unit One = pure ()
 check (Lam x e) (Fun a b) = do
   ctxAppend [((Mono, x), Just a)]
   check e b
@@ -281,7 +281,7 @@ applyType (Exs x) e = do
   pure $ Exs x''
 applyType (Fun a b) e = do
   check e a
-  return b
+  pure b
 applyType (For a t) e = do
   a' <- freshNam
   ctxAppend [((Exst, a'), Nothing)]

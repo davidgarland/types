@@ -134,7 +134,7 @@ freshVar = do
   case vars of
     x : xs -> do
       put (xs, s)
-      return $ Var x
+      pure $ Var x
     _ -> throwError "Failed to generate a fresh variable. Is the supply empty?"
 
 refresh :: Typing -> Infer Typing
@@ -144,7 +144,7 @@ refresh (Typing delta tau) = do
   let (used, vs') = splitAt (length tau_fv) vs
   let s' = Subst $ M.fromList (zip tau_fv (map Var used))
   put (vs', s)
-  return . apply (s <> s') $ Typing delta tau
+  pure . apply (s <> s') $ Typing delta tau
 
 reduce :: Nam -> Typing -> Typing
 reduce v (Typing (Delta dm) tau) = do
@@ -162,12 +162,12 @@ mergeDelta (Delta am) (Delta bm) = Delta <$> M.mergeA keep keep try am bm where
   try = M.zipWithAMatched $ \_ a b -> do
     unify a b
     b' <- applySub b
-    return $ b'
+    pure $ b'
 
 applySub :: Substable t => t -> Infer t
 applySub tau = do
   (_, s) <- get
-  return $ apply s tau
+  pure $ apply s tau
 
 -- Type Inference
 
@@ -183,7 +183,7 @@ doUnify (Fun a b) (Fun a' b') = do
   join $ unify <$> applySub b <*> applySub b'
 doUnify (Con a) (Con b) =
   if a == b then
-    return ()
+    pure ()
   else
     throwError $ "Failed to unify " <> tshow a <> " with " <> tshow b
 doUnify a b = throwError $ "Failed to unify " <> tshow a <> " with " <> tshow b
@@ -198,15 +198,15 @@ infer (Gamma gm) (Ref x) =
       refresh xt
     Nothing -> do
       alpha <- freshVar
-      return $ Typing (Delta $ M.singleton x alpha) alpha
+      pure $ Typing (Delta $ M.singleton x alpha) alpha
 infer g (Lam x e) = do  
   Typing delta@(Delta dm) sigma <- infer g e
   case M.lookup x dm of
     Just tau ->
-      return $ Typing (Delta $ M.delete x dm) (Fun tau sigma)
+      pure $ Typing (Delta $ M.delete x dm) (Fun tau sigma)
     Nothing -> do
       alpha <- freshVar
-      return $ Typing delta (Fun alpha sigma)
+      pure $ Typing delta (Fun alpha sigma)
 infer g (App a b) = do
   Typing ad at <- infer g a
   Typing bd bt <- infer g b
@@ -218,8 +218,8 @@ infer g@(Gamma gm) (Let x a b) = do
   at@(Typing ad _) <- reduce x <$> infer g a
   Typing bd tau <- infer (Gamma $ M.insert x at gm) b
   abd <- mergeDelta ad bd
-  return $ Typing abd tau
-infer _ (Num _) = return $ Typing (Delta M.empty) (Con "Int")
+  pure $ Typing abd tau
+infer _ (Num _) = pure $ Typing (Delta M.empty) (Con "Int")
 
 runInfer :: Gamma -> Exp -> (Either T.Text Typing, ([Nam], Subst))
 runInfer g e =
