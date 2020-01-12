@@ -725,7 +725,7 @@ Next, another fairly obvious rule-- if the context says `x : A`, then `x ⇒ A`.
 I'm not sure why they opted to write it like `(x : A) ∈ Γ` as though `Γ` were
 a set, rather than just writing the whole rule as `Γ[x : A] ⊢ x ⇒ A ⊣ Γ[x : A]`--
 judging by the name, maybe they wanted it to be similar to the rule of the same
-name from the damas-hindley-milner system.
+name from the Damas-Hindley-Milner system.
 
 ```
  (x : A) ∈ Γ
