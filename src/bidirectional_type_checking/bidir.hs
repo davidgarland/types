@@ -209,7 +209,7 @@ subtype a (Exs x) = do
   instRight a (Exs x)
 
 instLeft :: Type -> Type -> Infer ()
-instLeft (Exs x) (Exs y) = ctxInst Exst y (Exs x)
+instLeft (Exs x) (Exs y) = ctxHas (Exs x) >> ctxInst Exst y (Exs x)
 instLeft (Exs x) (Fun a b) = do
   x' <- freshNam
   x'' <- freshNam
@@ -223,11 +223,16 @@ instLeft (Exs x) (For a t) = do
   ctxAppend [((Poly, a), Nothing)]
   instLeft (Exs x) t 
   ctxCut Poly a
-instLeft (Exs x) y = ctxInst Exst x y
+instLeft (Exs x) t = do
+  (c, vs) <- get
+  ctxCut Exst x
+  ctxHas t
+  put (c, vs)
+  ctxInst Exst x t
 instLeft x _ = throwError "Inexhaustive pattern in instLeft."
 
 instRight :: Type -> Type -> Infer ()
-instRight (Exs x) (Exs y) = ctxInst Exst x (Exs y)
+instRight (Exs x) (Exs y) = ctxHas (Exs y) >> ctxInst Exst x (Exs y)
 instRight (Fun a b) (Exs y) = do
   y' <- freshNam
   y'' <- freshNam
