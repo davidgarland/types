@@ -245,7 +245,7 @@ instRight (For a t) (Exs y) = do
   ctxHas (TVar a)
   a' <- freshNam
   ctxAppend [((Mark, a'), Nothing), ((Exst, a'), Nothing)]
-  instRight (subst y (Exs a') t) (Exs y) 
+  instRight (subst a (Exs a') t) (Exs y) 
   ctxCut Mark a'
 instRight t (Exs y) = do
   (c, vs) <- get
