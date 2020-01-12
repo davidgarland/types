@@ -224,10 +224,10 @@ instLeft (Exs x) (For a t) = do
   instLeft (Exs x) t 
   ctxCut Poly a
 instLeft (Exs x) t = do
-  (c, vs) <- get
+  s <- get
   ctxCut Exst x
   ctxHas t
-  put (c, vs)
+  put s
   ctxInst Exst x t
 instLeft x _ = throwError "Inexhaustive pattern in instLeft."
 
@@ -248,10 +248,10 @@ instRight (For a t) (Exs y) = do
   instRight (subst a (Exs a') t) (Exs y) 
   ctxCut Mark a'
 instRight t (Exs y) = do
-  (c, vs) <- get
+  s <- get
   ctxCut Exst y
   ctxHas t
-  put (c, vs)
+  put s
   ctxInst Exst y t
 instRight _ _ = throwError "Inexhaustive pattern in instRight."
 
