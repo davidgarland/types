@@ -10,7 +10,7 @@ and making any changes to the context required to accomodate that. For instance,
 of `e` was unknown and assigned some type variable, then that might be instantiated by whatever `A` is.
 
 On the other hand, the judgement `e ⇒ A` is responsible for synthesizing a general type `A` for
-the expression `A`.
+the expression `e`.
 
 The two are used in tandem via mutual recursion-- checking judgement rules may refer to synthesis judgements,
 and vice versa (though in a way that terminates, of course). Once everything is set up correctly, you could
