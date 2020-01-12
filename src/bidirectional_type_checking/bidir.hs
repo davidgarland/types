@@ -288,10 +288,10 @@ synth (App a b) = do
   applyType at b
 synth (OfTy e t) = ctxHas t >> check e t $> t
 
-infer :: Ctx -> Expr -> (Either T.Text Type, (Ctx, [Name]))
+infer :: Ctx -> Expr -> Either T.Text Type
 infer c e =
   let vs = ((flip Name $ 0) . T.pack) <$> ([1..] >>= flip replicateM ['a'..'z'])
-  in (runState . runExceptT $ synth e) (c, vs)
+  in fst $ (runState . runExceptT $ synth e) (c, vs)
 
 -- Examples
 
@@ -316,8 +316,8 @@ test n e = do
   putStrLn $ "Input:    " ++ show e
   let infrd = infer [] $ rename M.empty e
   case infrd of
-    (Right t, (c, _))  -> putStrLn $ "Inferred: " ++ show t ++ "\nGamma:    " ++ show c
-    (Left err, (c, _)) -> putStrLn $ T.unpack err ++ "\nGamma: " ++ show c
+    Right t -> putStrLn $ "Inferred: " ++ show t
+    Left err -> putStrLn $ T.unpack err
 
 main = do
   test "id" eid
