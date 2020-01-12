@@ -97,7 +97,7 @@ ftv (Fun a b) = ftv a <> ftv b
 subst :: Name -> Type -> Type -> Type
 subst n w One = One
 subst n w (TVar x) = if n == x then w else TVar x
-subst n w (Exs x) = Exs x
+subst n w (Exs x) = Exs x -- Just because we never substitute existentials
 subst n w (For x t) = For x (subst n w t)
 subst n w (Fun a b) = Fun (subst n w a) (subst n w b)
 
@@ -192,10 +192,9 @@ subtype (Fun a a') (Fun b b') = do
   b'' <- ctxApply b'
   subtype a'' b''
 subtype (For x a) b = do
-  x' <- freshNam
-  ctxAppend [((Exst, x'), Nothing), ((Mark, x'), Nothing)]
-  subtype (subst x (Exs x') a) b
-  ctxCut Mark x'
+  ctxAppend [((Exst, x), Nothing), ((Mark, x), Nothing)]
+  subtype (subst x (Exs x) a) b
+  ctxCut Mark x
 subtype a (For x b) = do
   ctxAppend [((Poly, x), Nothing)]
   subtype a b
