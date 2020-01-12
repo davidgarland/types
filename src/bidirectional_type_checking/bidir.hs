@@ -153,10 +153,8 @@ ctxHas :: Type -> Infer ()
 ctxHas One = pure ()
 ctxHas (TVar x) = ctxFind Poly x $> ()
 ctxHas (Exs x) = ctxFind Exst x $> ()
-ctxHas (For x t) = do
-  ctxAppend [((Poly, x), Nothing)]
-  ctxHas t
-  ctxCut Poly x
+ctxHas (For x t) =
+  ctxAppend [((Poly, x), Nothing)] >> ctxHas t >> ctxCut Poly x
 ctxHas (Fun a b) = ctxHas a >> ctxHas b
 
 -- Context Adding
@@ -186,19 +184,14 @@ subtype :: Type -> Type -> Infer ()
 subtype One One = pure ()
 subtype (TVar a) (TVar a') | a == a' = ctxFind Poly a $> ()
 subtype (Exs a) (Exs a') | a == a' = ctxFind Exst a $> ()
-subtype (Fun a a') (Fun b b') = do
-  subtype b a
-  a'' <- ctxApply a'
-  b'' <- ctxApply b'
-  subtype a'' b''
+subtype (Fun a a') (Fun b b') =
+  subtype b a >> (join $ subtype <$> ctxApply a' <*> ctxApply b')
 subtype (For x a) b = do
   ctxAppend [((Exst, x), Nothing), ((Mark, x), Nothing)]
   subtype (subst x (Exs x) a) b
   ctxCut Mark x
-subtype a (For x b) = do
-  ctxAppend [((Poly, x), Nothing)]
-  subtype a b
-  ctxCut Poly x
+subtype a (For x b) =
+  ctxAppend [((Poly, x), Nothing)] >> subtype a b >> ctxCut Poly x
 subtype (Exs x) b = do
   ctxHas (Exs x)
   errIf (x `S.member` ftv b) $ "Failed to unify `" <> tshow x <> "` with `" <> tshow b <> "`."
@@ -219,7 +212,7 @@ instLeft (Exs x) (Fun a b) = do
   b' <- ctxApply b
   instLeft (Exs x'') b'
 instLeft (Exs x) (For a t) = do
-  _ <- ctxFind Exst x
+  ctxFind Exst x
   ctxAppend [((Poly, a), Nothing)]
   instLeft (Exs x) t 
   ctxCut Poly a
@@ -256,19 +249,12 @@ instRight _ _ = throwError "Inexhaustive pattern in instRight."
 
 check :: Expr -> Type -> Infer ()
 check Unit One = pure ()
-check (Lam x e) (Fun a b) = do
-  ctxAppend [((Mono, x), Just a)]
-  check e b
-  ctxCut Mono x
-check e (For a t) = do
-  ctxAppend [((Poly, a), Nothing)]
-  check e t
-  ctxCut Poly a
-check e t = do
-  et <- synth e
-  et' <- ctxApply et
-  t' <- ctxApply t
-  subtype et' t'
+check (Lam x e) (Fun a b) =
+  ctxAppend [((Mono, x), Just a)] >> check e b >> ctxCut Mono x
+check e (For a t) =
+  ctxAppend [((Poly, a), Nothing)] >> check e t >> ctxCut Poly a
+check e t =
+  join $ subtype <$> (synth e >>= ctxApply) <*> ctxApply t
 
 applyType :: Type -> Expr -> Infer Type
 applyType (Exs x) e = do
@@ -279,13 +265,9 @@ applyType (Exs x) e = do
   ctxInst Exst x $ Fun (Exs x') (Exs x'')
   check e (Exs x')
   pure $ Exs x''
-applyType (Fun a b) e = do
-  check e a
-  pure b
-applyType (For a t) e = do
-  a' <- freshNam
-  ctxAppend [((Exst, a'), Nothing)]
-  applyType (subst a (Exs a') t) e
+applyType (Fun a b) e = check e a $> b
+applyType (For a t) e =
+  ctxAppend [((Exst, a), Nothing)] >> applyType (subst a (Exs a) t) e
 
 synth :: Expr -> Infer Type
 synth Unit = pure One
@@ -302,13 +284,9 @@ synth (Lam x e) = do
   ctxCut Mono x
   pure $ Fun (Exs a) (Exs b)
 synth (App a b) = do
-  at <- synth a
-  at' <- ctxApply at
-  applyType at' b
-synth (OfTy e t) = do
-  ctxHas t
-  check e t
-  pure t
+  at <- synth a >>= ctxApply
+  applyType at b
+synth (OfTy e t) = ctxHas t >> check e t $> t
 
 infer :: Ctx -> Expr -> (Either T.Text Type, (Ctx, [Name]))
 infer c e =
