@@ -212,7 +212,7 @@ instLeft (Exs x) (Fun a b) = do
   b' <- ctxApply b
   instLeft (Exs x'') b'
 instLeft (Exs x) (For a t) = do
-  ctxFind Exst x
+  ctxHas (Exs x)
   ctxAppend [((Poly, a), Nothing)]
   instLeft (Exs x) t 
   ctxCut Poly a
