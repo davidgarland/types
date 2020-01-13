@@ -649,9 +649,6 @@ expression `e`; we say that our existential type variable `∃a` is a function
          Γ[∃a] ⊢ ∃a • e ⇒⇒ ^∃a'' ⊣ ∆
 ```
 
-The Haskell for this is a little large, as we need to check that `∃a` is in the context,
-generate two fresh names, 
-
 ```Haskell
 applyType (Exs x) e = do
   ctxHas (Exs x)
