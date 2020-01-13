@@ -138,7 +138,7 @@ data CtxKind -- Γ, ∆, Θ ::= ·
   deriving (Eq, Show)
 type Ctx = [((CtxKind, Name), Maybe Type)]
 
-type Infer t = ExceptT T.Text (State (Ctx, [Nam])) t
+type Infer t = ExceptT T.Text (State (Ctx, [Name])) t
 ```
 
 ### Omitted "Boring" Functions
@@ -169,9 +169,9 @@ the existential variable, because an existential can be instantiated as another 
 so this makes sure to expand it fully.
 
 ```Haskell
-ctxApply :: Typ -> Infer Typ
+ctxApply :: Type -> Infer Type
 ctxApply One = pure One
-ctxApply (Var x) = pure $ Var x
+ctxApply (TVar x) = pure $ TVar x
 ctxApply (Exs x) = ctxFind Exst x >>= maybe (pure $ Exs x) ctxApply
 ctxApply (For x t) = For x <$> ctxApply t
 ctxApply (Fun a b) = Fun <$> ctxApply a <*> ctxApply b
