@@ -116,9 +116,11 @@ errIf c e = if c then throwError e else pure ()
 -- Context Cut / Instantiation
 
 cut :: Eq a => a -> e -> [(a, b)] -> Either e [(a, b)]
-cut k e ((x, _) : xs)
-  | k == x    = Right xs
-  | otherwise = cut k e xs
+cut k e ((x, v) : xs)
+  | k == x    = Right []
+  | otherwise = do
+    r' <- cut k e xs
+    Right ((x, v) : r')
 cut k e [] = Left e
 
 inst :: Eq a => a -> b -> e -> [(a, b)] -> Either e [(a, b)]
@@ -160,7 +162,7 @@ ctxHas (Fun a b) = ctxHas a >> ctxHas b
 -- Context Adding
 
 ctxAppend :: Ctx -> Infer ()
-ctxAppend c' = modify (\(c, vs) -> (c' ++ c, vs))
+ctxAppend c' = modify (\(c, vs) -> (c ++ c', vs))
 
 ctxPrepend :: CtxKind -> Name -> Ctx -> Infer ()
 ctxPrepend k n c' = do
@@ -187,7 +189,7 @@ subtype (Exs a) (Exs a') | a == a' = ctxFind Exst a $> ()
 subtype (Fun a a') (Fun b b') =
   subtype b a >> (join $ subtype <$> ctxApply a' <*> ctxApply b')
 subtype (For x a) b = do
-  ctxAppend [((Exst, x), Nothing), ((Mark, x), Nothing)]
+  ctxAppend [((Mark, x), Nothing), ((Exst, x), Nothing)]
   subtype (subst x (Exs x) a) b
   ctxCut Mark x
 subtype a (For x b) =
