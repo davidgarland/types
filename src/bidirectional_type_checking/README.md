@@ -286,7 +286,7 @@ using a marker.
 
 ```Haskell
 subtype (For x a) b = do
-  ctxAppend [((Exst, x), Nothing), ((Mark, x), Nothing)]
+  ctxAppend [((Mark, x), Nothing), ((Exst, x), Nothing)]
   subtype (subst x (Exs x) a) b
   ctxCut Mark x
 ```
