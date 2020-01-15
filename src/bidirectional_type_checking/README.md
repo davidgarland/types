@@ -376,6 +376,10 @@ then instantiates the second variable to the first.
 The Haskell is pretty simple; the call to `ctxInst` naturally already requires
 searching the context for `∃b` (called `y` here), so we only do the search for `∃a` (called `x` here).
 
+**TODO Wed, Jan 15, 2020: This code is actually wrong, because I forgot to check whether x or y comes
+first in the context-- it is an *ordered* context! In this code, if `Exst y` happens to come before `Exst x`
+in the context, this rule would lead to a context that is not well-formed. I need to fix this.**
+
 ```Haskell
 instLeft (Exs x) (Exs y) = ctxHas (Exs x) >> ctxInst Exst y (Exs x)
 ```
@@ -479,6 +483,10 @@ the left-hand side in the judgement (but is on the same side in the context.)
 ------------------------------------------ [InstRReach]
 Γ[∃a][∃b] ⊢ instR(∃b, ∃a) ⊣ Γ[∃a][∃b = ∃a]
 ```
+
+**TODO Wed, Jan 15, 2020: This code is actually wrong, because I forgot to check whether x or y comes
+first in the context-- it is an *ordered* context! In this code, if `Exst y` happens to come before `Exst x`
+in the context, this rule would lead to a context that is not well-formed. I need to fix this.**
 
 ```Haskell
 instRight (Exs x) (Exs y) = ctxHas (Exs y) >> ctxInst Exst x (Exs y)
