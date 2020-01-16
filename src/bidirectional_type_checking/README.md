@@ -152,6 +152,7 @@ concrete implementations.
 - `subst n a b` substitutes the type `a` in wherever the type variable with the name `n` is found, replacing it with `b`.
 - `ctxInst k n t` instantiates the context entry with `(k, n)` as its key to have the value `Just t`.
 - `ctxCut k n` "cuts" the context up to some entry with `(k, n)` as its key. This is what `Mark` is for.
+- `ctxIdx k n` finds the index in the associative list with the key `(k, n)`.
 - `ctxFind k n` performs an associative list lookup with the key `(k, n)`.
 - `ctxHas t` guarantees the type `t` is well-formed in the current context.
 - `ctxAppend c` adds the context `c` to the current context by doing a "dumb" concatenation-- no shadowing checks.
@@ -373,15 +374,16 @@ then instantiates the second variable to the first.
 Γ[∃a][∃b] ⊢ instL(∃a, ∃b) ⊣ Γ[∃a][∃b = ∃a]
 ```
 
-The Haskell is pretty simple; the call to `ctxInst` naturally already requires
-searching the context for `∃b` (called `y` here), so we only do the search for `∃a` (called `x` here).
-
-**TODO Wed, Jan 15, 2020: This code is actually wrong, because I forgot to check whether x or y comes
-first in the context-- it is an *ordered* context! In this code, if `Exst y` happens to come before `Exst x`
-in the context, this rule would lead to a context that is not well-formed. I need to fix this.**
+The Haskell is pretty simple; we use `ctxIdx` to query that the two existentials
+exist in the context and that their positions are correct-- we don't want to
+instantiate `y` to `x` if it's not valid in the context prior to `y`.
 
 ```Haskell
-instLeft (Exs x) (Exs y) = ctxHas (Exs x) >> ctxInst Exst y (Exs x)
+instLeft (Exs x) (Exs y) = do
+  xi <- ctxIdx Exst x
+  yi <- ctxIdx Exst y
+  errIf (xi > yi) "Invalid left-instantiation."
+  ctxInst Exst y (Exs x)
 ```
 
 **[InstLArr]**
@@ -484,12 +486,12 @@ the left-hand side in the judgement (but is on the same side in the context.)
 Γ[∃a][∃b] ⊢ instR(∃b, ∃a) ⊣ Γ[∃a][∃b = ∃a]
 ```
 
-**TODO Wed, Jan 15, 2020: This code is actually wrong, because I forgot to check whether x or y comes
-first in the context-- it is an *ordered* context! In this code, if `Exst y` happens to come before `Exst x`
-in the context, this rule would lead to a context that is not well-formed. I need to fix this.**
-
 ```Haskell
-instRight (Exs x) (Exs y) = ctxHas (Exs y) >> ctxInst Exst x (Exs y)
+instRight (Exs x) (Exs y) = do
+  xi <- ctxIdx Exst x
+  yi <- ctxIdx Exst y
+  errIf (yi > xi) "Invalid right-instantiation."
+  ctxInst Exst x (Exs y)
 ```
 
 **[InstRArr]**

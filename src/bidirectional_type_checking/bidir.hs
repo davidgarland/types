@@ -146,6 +146,19 @@ ctxInst k n t = ctxDo . inst (k, n) (Just t) $ "Failed to instantiate variable `
 
 -- Context Querying
 
+idx :: Eq a => Int -> a -> e -> [(a, b)] -> Either e Int
+idx i k e [] = Left e
+idx i k e ((k', _) : kvs)
+  | k == k' = Right i
+  | otherwise = idx (i + 1) k e kvs
+
+ctxIdx :: CtxKind -> Name -> Infer Int
+ctxIdx k n = do
+  (c, _) <- get
+  case idx 0 (k, n) ("Failed to find variable `" <> tshow k <> " " <> tshow n <> "`.") c of
+    Left e -> throwError e
+    Right i -> pure i
+
 ctxFind :: CtxKind -> Name -> Infer (Maybe Type)
 ctxFind k n = do
   (c, _) <- get
@@ -204,7 +217,11 @@ subtype a (Exs x) = do
   instRight a (Exs x)
 
 instLeft :: Type -> Type -> Infer ()
-instLeft (Exs x) (Exs y) = ctxHas (Exs x) >> ctxInst Exst y (Exs x)
+instLeft (Exs x) (Exs y) = do
+  xi <- ctxIdx Exst x
+  yi <- ctxIdx Exst y
+  errIf (xi > yi) "Invalid left-instantiation."
+  ctxInst Exst y (Exs x)
 instLeft (Exs x) (Fun a b) = do
   x' <- freshNam
   x'' <- freshNam
@@ -227,7 +244,11 @@ instLeft (Exs x) t = do
 instLeft x _ = throwError "Inexhaustive pattern in instLeft."
 
 instRight :: Type -> Type -> Infer ()
-instRight (Exs x) (Exs y) = ctxHas (Exs y) >> ctxInst Exst x (Exs y)
+instRight (Exs x) (Exs y) = do
+  xi <- ctxIdx Exst x
+  yi <- ctxIdx Exst y
+  errIf (yi > xi) "Invalid right-instantiation."
+  ctxInst Exst x (Exs y)
 instRight (Fun a b) (Exs y) = do
   y' <- freshNam
   y'' <- freshNam
