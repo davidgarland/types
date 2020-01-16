@@ -613,7 +613,7 @@ so as to avoid them escaping.
 ```
 
 ```Haskell
-[check e (For a t) =
+check e (For a t) =
   ctxAppend [((Poly, a), Nothing)] >> check e t >> ctxCut Poly a
 ```
 
