@@ -395,7 +395,7 @@ type variables from the supply as there are variables in `tau_fv`, then remap
 the old type variable names to the new ones by creating a temporary
 substitution `s''` that we apply to our typing.
 
-```
+```Haskell
 refresh (Typing delta tau) = do
   (vs, s) <- get
   let tau_fv = S.toList (ftv tau `S.difference` ftv delta)
