@@ -277,7 +277,7 @@ doUnify (TVar x) t =
 
 **A ~ a**
 
-The rule for `a ~ A` and `A ~ a` is the same, so we just recurse.
+The rules for `a ~ A` and `A ~ a` are the same, so we just recurse.
 
 ```Haskell
 doUnify t (TVar x) = doUnify (TVar x) t
