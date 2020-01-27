@@ -428,15 +428,12 @@ the supported type and the Δ-context. Therefore we must remove it, or else
 the polymorphic `let`-bound variable with would be unified with one another.
 
 ```Haskell
-refresh :: Typing -> Infer Typing
-refresh (Typing delta tau) = do
-  (vs, s) <- get
-  let tau_fv = S.toList (ftv tau `S.difference` ftv delta)
-  let (used, vs') = splitAt (length tau_fv) vs
-  let s' = Subst $ M.fromList (zip tau_fv (map TVar used))
-  s'' <- compose s s'
-  put (vs', s)
-  pure . apply s'' $ Typing delta tau
+reduce :: Name -> Typing -> Typing
+reduce v (Typing (Delta dm) tau) = do
+  let tau_fv = ftv tau
+  let keep sigma = not . S.null $ ftv sigma `S.intersection` tau_fv
+  let dm' = M.filter keep (M.delete v dm)
+  Typing (Delta dm') tau
 ```
 
 ### Inference
