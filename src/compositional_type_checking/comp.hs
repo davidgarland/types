@@ -16,51 +16,51 @@ import qualified Data.Map.Merge.Strict as M
 import qualified Data.Set as S
 import Control.Monad.Except
 import Control.Monad.State
+import Data.Maybe
 
 -- Core
 
-data Nam
-  = Nam T.Text Int
+data Name
+  = Name T.Text Int
   deriving (Eq, Ord)
 
-data Exp
-  = Ref Nam
-  | Lam Nam Exp
-  | App Exp Exp
-  | Let Nam Exp Exp
-  | Num Int
+data Expr
+  = Ref Name
+  | Lam Name Expr
+  | App Expr Expr
+  | Let Name Expr Expr
+  | Unit
 
-data Typ
-  = Var Nam
-  | Fun Typ Typ
-  | Con T.Text
+data Type
+  = TVar Name
+  | Fun  Type Type
+  | One
   deriving (Eq)
 
-newtype Delta   = Delta (M.Map Nam Typ)
-newtype Subst   = Subst (M.Map Nam Typ)
-data    Typing  = Typing Delta Typ
-newtype Gamma   = Gamma (M.Map Nam Typing)
-type    Infer t = ExceptT T.Text (State ([Nam], Subst)) t
-
+newtype Delta   = Delta (M.Map Name Type)
+newtype Subst   = Subst (M.Map Name Type)
+data    Typing  = Typing Delta Type
+newtype Gamma   = Gamma (M.Map Name Typing)
+type    Infer t = ExceptT T.Text (State ([Name], Subst)) t
 
 -- Show Instances
 
-instance Show Nam where
-  show (Nam t _) = T.unpack t
+instance Show Name where
+  show (Name t _) = T.unpack t
 
-instance Show Exp where
+instance Show Expr where
   show (Ref x) = show x
   show (Lam x e) = "λ" ++ show x ++ ". " ++ show e
   show (App a (App b c)) = show a ++ " (" ++ show (App b c) ++ ")"
   show (App a b) = show a ++ " " ++ show b
   show (Let x a b) = "let " ++ show x ++ " = " ++ show a ++ " in " ++ show b
-  show (Num n) = show n
+  show Unit = "()"
 
-instance Show Typ where
-  show (Var x) = show x
+instance Show Type where
+  show (TVar x) = show x
   show (Fun (Fun a b) c) = "(" ++ show (Fun a b) ++ ") -> " ++ show c
   show (Fun a b) = show a ++ " -> " ++ show b
-  show (Con x) = T.unpack x
+  show One = "1"
 
 instance Show Delta where
   show (Delta dm) = "{" ++ (showNamMap $ M.toList dm) ++ "}"
@@ -71,7 +71,7 @@ instance Show Subst where
 instance Show Typing where
   show (Typing delta tau) = show delta ++ " |- " ++ show tau
 
-showNamMap :: [(Nam, Typ)] -> String
+showNamMap :: [(Name, Type)] -> String
 showNamMap [] = ""
 showNamMap ((k, v) : []) = show k ++ " : " ++ show v
 showNamMap ((k, v) : kvs) = show k ++ " : " ++ show v ++ ", " ++ showNamMap kvs
@@ -83,13 +83,13 @@ tshow = T.pack . show
 
 type Rnm = M.Map T.Text Int
 
-incNam :: Nam -> Rnm -> Rnm
-incNam n@(Nam t _) r = let Nam _ v' = getNam r n in M.insert t (v' + 1) r
+incNam :: Name -> Rnm -> Rnm
+incNam n@(Name t _) r = let Name _ v' = getNam r n in M.insert t (v' + 1) r
 
-getNam :: Rnm -> Nam -> Nam
-getNam r (Nam t _) = Nam t $ M.findWithDefault 0 t r
+getNam :: Rnm -> Name -> Name
+getNam r (Name t _) = Name t $ M.findWithDefault 0 t r
 
-rename :: Rnm -> Exp -> Exp
+rename :: Rnm -> Expr -> Expr
 rename r (Ref x) = Ref $ getNam r x
 rename r (Lam x e) =
   let r' = incNam x r in
@@ -98,25 +98,25 @@ rename r (App a b) = App (rename r a) (rename r b)
 rename r (Let x a b) =
   let r' = incNam x r in
   Let (getNam r' x) (rename r' a) (rename r' b)
-rename _ (Num n) = Num n
+rename _ Unit = Unit
 
 -- Typeclasses
 
-instance Semigroup Subst where
-  a@(Subst ma) <> b@(Subst mb) =
-    Subst (fmap (apply b) ma <> fmap (apply a) mb)
-
 class Substable a where
   apply :: Subst -> a -> a
-  ftv :: a -> S.Set Nam
+  ftv :: a -> S.Set Name
 
-instance Substable Typ where
-  ftv (Var x) = S.singleton x
+instance Substable Type where
+  ftv (TVar x) = S.singleton x
   ftv (Fun a b) = ftv a <> ftv b
-  ftv (Con _) = S.empty
-  apply (Subst m) (Var x) = M.findWithDefault (Var x) x m
+  ftv One = S.empty
+  apply s@(Subst m) v@(TVar x) = fromMaybe v $ apply s <$> M.lookup x m
   apply s (Fun a b) = Fun (apply s a) (apply s b)
-  apply _ x@(Con _) = x
+  apply _ One = One
+
+instance Substable Subst where
+  apply s (Subst a) = Subst $ apply s <$> a
+  ftv (Subst a) = foldMap ftv a
 
 instance Substable Delta where
   apply s (Delta m) = Delta $ fmap (apply s) m
@@ -126,15 +126,23 @@ instance Substable Typing where
   apply s (Typing d t) = Typing (apply s d) (apply s t)
   ftv (Typing d t) = ftv d <> ftv t
 
+compose :: Subst -> Subst -> Infer Subst
+compose a@(Subst ma) b@(Subst mb) =
+  Subst <$> (M.traverseMaybeWithKey try $ ma <> (apply a <$> mb))
+    where
+      try k x | (TVar k) == x = pure Nothing
+      try k x | k `S.member` ftv x = throwError "Attempt to create infinite substitution."
+      try k x = pure $ Just x
+
 -- Monadic Functions
 
-freshVar :: Infer Typ
+freshVar :: Infer Type
 freshVar = do
   (vars, s) <- get
   case vars of
     x : xs -> do
       put (xs, s)
-      pure $ Var x
+      pure $ TVar x
     _ -> throwError "Failed to generate a fresh variable. Is the supply empty?"
 
 refresh :: Typing -> Infer Typing
@@ -142,11 +150,12 @@ refresh (Typing delta tau) = do
   (vs, s) <- get
   let tau_fv = S.toList (ftv tau `S.difference` ftv delta)
   let (used, vs') = splitAt (length tau_fv) vs
-  let s' = Subst $ M.fromList (zip tau_fv (map Var used))
+  let s' = Subst $ M.fromList (zip tau_fv (map TVar used))
+  s'' <- compose s s'
   put (vs', s)
-  pure . apply (s <> s') $ Typing delta tau
+  pure . apply s'' $ Typing delta tau
 
-reduce :: Nam -> Typing -> Typing
+reduce :: Name -> Typing -> Typing
 reduce v (Typing (Delta dm) tau) = do
   let tau_fv = ftv tau
   let keep sigma = not . S.null $ ftv sigma `S.intersection` tau_fv
@@ -154,15 +163,16 @@ reduce v (Typing (Delta dm) tau) = do
   Typing (Delta dm') tau
 
 extendSub :: Subst -> Infer ()
-extendSub s' = modify (\(vs, s) -> (vs, s <> s'))
+extendSub s' = do
+  (vs, s) <- get
+  s'' <- compose s s'
+  put (vs, s'')
 
 mergeDelta :: Delta -> Delta -> Infer Delta
-mergeDelta (Delta am) (Delta bm) = Delta <$> M.mergeA keep keep try am bm where
-  keep = M.preserveMissing
-  try = M.zipWithAMatched $ \_ a b -> do
-    unify a b
-    b' <- applySub b
-    pure $ b'
+mergeDelta (Delta am) (Delta bm) = Delta <$> M.mergeA keep keep try am bm
+  where
+    keep = M.preserveMissing
+    try = M.zipWithAMatched $ \_ a b -> unify a b >> applySub b
 
 applySub :: Substable t => t -> Infer t
 applySub tau = do
@@ -171,27 +181,21 @@ applySub tau = do
 
 -- Type Inference
 
-doUnify :: Typ -> Typ -> Infer ()
-doUnify (Var x) t =
-  if (x `S.member` ftv t) && (t /= Var x) then
-    throwError $ "Failed to unify " <> tshow (Var x) <> " with " <> tshow t
-  else
-    extendSub $ Subst (M.singleton x t)
-doUnify t (Var x) = doUnify (Var x) t
-doUnify (Fun a b) (Fun a' b') = do
-  doUnify a a'
-  join $ unify <$> applySub b <*> applySub b'
-doUnify (Con a) (Con b) =
-  if a == b then
-    pure ()
-  else
-    throwError $ "Failed to unify " <> tshow a <> " with " <> tshow b
-doUnify a b = throwError $ "Failed to unify " <> tshow a <> " with " <> tshow b
-
-unify :: Typ -> Typ -> Infer ()
+unify :: Type -> Type -> Infer ()
 unify l r = join $ doUnify <$> applySub l <*> applySub r
 
-infer :: Gamma -> Exp -> Infer Typing
+doUnify :: Type -> Type -> Infer ()
+doUnify (TVar x) t =
+  if (x `S.member` ftv t) && (t /= TVar x) then
+    throwError $ "Failed to unify " <> tshow (TVar x) <> " with " <> tshow t
+  else
+    extendSub $ Subst (M.singleton x t)
+doUnify t (TVar x) = doUnify (TVar x) t
+doUnify (Fun a b) (Fun a' b') = doUnify a a' >> unify b b'
+doUnify One One = pure ()
+doUnify a b = throwError $ "Failed to unify " <> tshow a <> " with " <> tshow b
+
+infer :: Gamma -> Expr -> Infer Typing
 infer (Gamma gm) (Ref x) =
   case M.lookup x gm of
     Just xt ->
@@ -219,37 +223,37 @@ infer g@(Gamma gm) (Let x a b) = do
   Typing bd tau <- infer (Gamma $ M.insert x at gm) b
   abd <- mergeDelta ad bd
   pure $ Typing abd tau
-infer _ (Num _) = pure $ Typing (Delta M.empty) (Con "Int")
+infer _ Unit = pure $ Typing (Delta M.empty) (One)
 
-runInfer :: Gamma -> Exp -> (Either T.Text Typing, ([Nam], Subst))
+runInfer :: Gamma -> Expr -> (Either T.Text Typing, ([Name], Subst))
 runInfer g e =
-  let vs = ((flip Nam $ 0) . T.pack) <$> ([1..] >>= flip replicateM ['a'..'z'])
+  let vs = ((`Name` 0) . T.pack) <$> ([1..] >>= flip replicateM ['a'..'z'])
    in (runState . runExceptT $ (infer g e)) (vs, Subst $ M.empty)
 
 -- Examples
 
-nam :: T.Text -> Nam
-nam x = Nam x 0
+name :: T.Text -> Name
+name x = Name x 0
 
-ref :: T.Text -> Exp
-ref = Ref . nam
+ref :: T.Text -> Expr
+ref = Ref . name
 
-lam :: T.Text -> Exp -> Exp
-lam n e = Lam (nam n) e
+lam :: T.Text -> Expr -> Expr
+lam n e = Lam (name n) e
 
-eid :: Exp
-eid = Lam (Nam "x" 0) $ Ref (Nam "x" 0)
+eid :: Expr
+eid = Lam (Name "x" 0) $ Ref (Name "x" 0)
 
-etrue :: Exp
+etrue :: Expr
 etrue = lam "x" $ lam "y" $ ref "x"
 
-edollar :: Exp
-edollar = Lam (Nam "f" 0) $ Lam (Nam "x" 0) $ App (Ref (Nam "f" 0)) (Ref (Nam "x" 0))
+edollar :: Expr
+edollar = Lam (name "f") $ Lam (name "x") $ App (ref "f") (ref "x")
 
-egen :: Exp
-egen = Let (nam "true") etrue $ Let (nam "id") eid $ App (App (ref "true") (App (ref "id") (ref "id"))) (Num 0)
+egen :: Expr
+egen = Let (name "true") etrue $ Let (name "id") eid $ App (App (ref "true") (App (ref "id") (ref "id"))) Unit
 
-test :: String -> Exp -> IO ()
+test :: String -> Expr -> IO ()
 test n e = do
   putStrLn $ " -- " ++ n ++ " --"
   putStrLn $ "Input:    " ++ show e
