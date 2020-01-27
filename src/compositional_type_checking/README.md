@@ -38,7 +38,7 @@ In contrast to those twos' work, I seek to contribute the following points:
 
 - Keeping the write-up and the source code given 1:1.
 - Strike a balance between being proper and having concise code by using MTL transformers.
-- Keep as much of the program as possible still in the explanation, bar alpha-conversion, as I hope we can all agree that's pretty boring.
+- Keep as much of the program as possible still in the explanation, bar things like alpha-conversion, as I hope we can all agree that's pretty boring.
 
 But there are also a couple downsides to my approach, which should be noted:
 
@@ -119,7 +119,7 @@ The unordered nature of the contexts lends itself nicely to a simple `Map`
 type, so that we can efficiently query it.
 
 ```Haskell
-newtype Delta = Delta (M.Map Name Type)`
+newtype Delta = Delta (M.Map Name Type)
 ```
 
 **Typings**
