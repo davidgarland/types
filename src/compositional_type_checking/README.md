@@ -217,7 +217,7 @@ To do this properly, we use the `Semigroup (Map k v)` definition to keep any
 fields from `a` not in `b`, but apply the substitution `a` to `b` for any fields
 that are in both. Then, entries like `[a := a]` are removed, and entries like
 `[a := a -> b]` are an occurs error-- if we didn't prevent these, it could lead
-to mysterious hangs, since `subst` would keep trying to expand `a` ad infinitum.
+to mysterious hangs, since `apply` would keep trying to expand `a` ad infinitum.
 
 ```Haskell
 compose :: Subst -> Subst -> Infer Subst
