@@ -422,10 +422,10 @@ fewer perfectly programs.
 
 As for why we want to remove a specified term variable-- that is for the
 `let`-bound variable name, because we don't want that to be unified. The type
-of the `let`-bound variable is not handled by `refresh` since it is free in both
-the supported type and the Δ-context. Therefore we must remove it, or else
-`let`-polymorphism flat out won't work, because every type that we tried to use
-the polymorphic `let`-bound variable with would be unified with one another.
+of the `let`-bound variable is not handled by `refresh` since it may occur in
+the Δ-context thanks to recursive `let` bindings. If we didn't remove it, then
+its type would be monomorphic because it is in the Δ-context-- which obviously
+isn't what we want.
 
 ```Haskell
 reduce :: Name -> Typing -> Typing
@@ -438,7 +438,109 @@ reduce v (Typing (Delta dm) tau) = do
 
 ### Inference
 
-#### TODO
+The type signature for inference is pretty much what you'd expect; we need the
+Γ-context to propagate our polymorphic typings downwards, and we want to
+infer a typing from an expression.
 
-I'll have this part written soon, and then this write-up is more or less
-complete. :)
+```Haskell
+infer :: Gamma -> Expr -> Infer Typing
+```
+
+The rules for inference are given below.
+
+**[Var]**
+
+First, there's the case for term variables. If the term variable is `let`-bound,
+we take the typing from that and refresh it. Otherwise, we generate a fresh
+variable and use that as the constraint upon the term variable's type.
+
+```Haskell
+infer (Gamma gm) (Ref x) =
+  case M.lookup x gm of
+    Just xt ->
+      refresh xt
+    Nothing -> do
+      alpha <- freshVar
+      pure $ Typing (Delta $ M.singleton x alpha) alpha
+```
+
+**[Abs]**
+
+Next, we have lambda-abstractions. First, we infer a type `sigma` and Δ-context
+`delta` for the expression. If the bound variable is already given a typing by
+`delta`, we use that definition with the bound variable removed from `delta`,
+and the supported type is `tau -> sigma` where `tau` was the type for the
+bound variable we got by querying `delta`. Otherwise, we generate a fresh type
+`alpha`, use `delta` as our resulting Δ-context, and `alpha -> sigma` is the
+supported type.
+
+```Haskell
+infer g (Lam x e) = do
+  Typing delta@(Delta dm) sigma <- infer g e
+  case M.lookup x dm of
+    Just tau ->
+      pure $ Typing (Delta $ M.delete x dm) (Fun tau sigma)
+    Nothing -> do
+      alpha <- freshVar
+      pure $ Typing delta (Fun alpha sigma)
+```
+
+**[App]**
+
+The rule for applications is a little bit more interesting. First, both branches
+of the application are recursed upon, and we get the Δ-context and supported
+type for each. Then, we make a fresh type variable `alpha` and perform the
+unification `at ~ (bt -> alpha)`. This way, `alpha` is the resulting type of
+the function-- we only need to make sure that `ad` and `bd` are compatible by
+merging them, then applying the substitution to `alpha` to get the final result.
+
+```Haskell
+infer g (App a b) = do
+  Typing ad at <- infer g a
+  Typing bd bt <- infer g b
+  alpha <- freshVar
+  unify at (Fun bt alpha)
+  abd <- mergeDelta ad bd
+  applySub $ Typing abd alpha
+```
+
+**[Let]**
+
+`let`-bindings are very easy-- given `let x = a in b`, first we find the typing
+of `a`, then reduce it with respect to `x`. After that's done, we find the
+typing for `b` and use that reduced typing from earlier as a new entry in the
+Γ-context, with `x` as the key. Afterwards, the Δ-contexts of both branches
+are merged, and the type for `b` with the merged Δ-contex is the result.
+
+```Haskell
+infer g@(Gamma gm) (Let x a b) = do
+  at@(Typing ad _) <- reduce x <$> infer g a
+  Typing bd tau <- infer (Gamma $ M.insert x at gm) b
+  abd <- mergeDelta ad bd
+  pure $ Typing abd tau
+```
+
+**[Unit]**
+
+Aaaaand finally the most trivial case.
+
+```Haskell
+infer _ Unit = pure $ Typing (Delta M.empty) One
+```
+
+### Running Inference
+
+Although in a practical scenario you'd want to delay this as much as possible
+so that the substitution and fresh name supply would be kept intact, here a
+function `runInfer` is defined to give a basic idea of how to actually run
+`infer`, with an infinite supply of variable names.
+
+```Haskell
+runInfer :: Gamma -> Expr -> Either T.Text Typing
+runInfer g e =
+  let vs = ((`Name` 0) . T.pack) <$> ([1..] >>= flip replicateM ['a'..'z'])
+   in fst $ (runState . runExceptT $ (infer g e)) (vs, Subst M.empty)
+```
+
+Thus concludes the implementation of the system, and hopefully I've managed to
+present one that actually works and is somewhat concise.

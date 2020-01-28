@@ -223,12 +223,12 @@ infer g@(Gamma gm) (Let x a b) = do
   Typing bd tau <- infer (Gamma $ M.insert x at gm) b
   abd <- mergeDelta ad bd
   pure $ Typing abd tau
-infer _ Unit = pure $ Typing (Delta M.empty) (One)
+infer _ Unit = pure $ Typing (Delta M.empty) One
 
-runInfer :: Gamma -> Expr -> (Either T.Text Typing, ([Name], Subst))
+runInfer :: Gamma -> Expr -> Either T.Text Typing
 runInfer g e =
   let vs = ((`Name` 0) . T.pack) <$> ([1..] >>= flip replicateM ['a'..'z'])
-   in (runState . runExceptT $ (infer g e)) (vs, Subst $ M.empty)
+   in fst $ (runState . runExceptT $ (infer g e)) (vs, Subst M.empty)
 
 -- Examples
 
@@ -257,7 +257,7 @@ test :: String -> Expr -> IO ()
 test n e = do
   putStrLn $ " -- " ++ n ++ " --"
   putStrLn $ "Input:    " ++ show e
-  case fst . runInfer (Gamma M.empty) $ rename M.empty e of
+  case runInfer (Gamma M.empty) $ rename M.empty e of
     Right t  -> putStrLn $ "Inferred: " ++ show t
     Left err -> putStrLn $ T.unpack err
 
