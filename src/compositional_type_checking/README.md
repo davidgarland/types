@@ -22,7 +22,8 @@ This system is largely based off of the examples given by
 [Abigail Magalhães](https://github.com/plt-abigail) from
 [her article on the topic](https://abby.how/posts/2019-01-28.html)
 and the [associated repo.](https://github.com/plt-abigail/mld) It's more or
-less just a straight translation, and you should thank them for doing all of the
+less just a straight translation (with bugfixes, at least as far as I can tell, to how
+substitution is done), and you should thank them for doing all of the
 work.
 
 The secondary source I'm using, in order to avoid my misconceptions, is
