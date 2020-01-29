@@ -1,4 +1,5 @@
 # Dependent Types
+# NOTE: In need of a rewrite.
 
 Dependent types are a fairly simple extension to the lambda calculus that allows
 the programmer to write types that depend upon values; more information is given
