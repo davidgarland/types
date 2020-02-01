@@ -419,7 +419,7 @@ The reason for this is fairly simple-- in our earlier example, the only reason
 `xform` had any impact on the type of `xs` was because it shared a type variable
 with it, namely `a`. If no such connection exists, then keeping that entry in
 the Δ-context only serves to make the typing "less polymorphic" and admit
-fewer perfectly programs.
+fewer perfectly valid programs.
 
 As for why we want to remove a specified term variable-- that is for the
 `let`-bound variable name, because we don't want that to be unified. The type
