@@ -3,7 +3,7 @@
 ## Introduction
 
 Compositional type checking is a unique style of type checking that treats
-existentials in a more "bottom-up" rather than "top-down" manner compared to
+constraints in a more "bottom-up" rather than "top-down" manner compared to
 the traditional methods. Instead of generating placeholder type variables as
 the tree is traversed downwards, compositional typings propagate a set of
 "constraints" upon the types of an expression upwards, which are then resolved.
