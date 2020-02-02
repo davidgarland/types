@@ -131,7 +131,7 @@ by Andrej Bauer; there are a few core differences to my implementation, however:
 - I implement a cumulative universe heirarchy.
 - I implement dependent pairs, sigma types, and the fst/snd projections.
 - He used a flavor of ML, whereas this is in Haskell.
-- I opt to not do the extra normalization in `inferUnv`/`inferPi`, which he would consider a mistake; however, as my system does substitution on the fly and has no "global definition" context and normalization is done on the fly, I don't believe it's possible for `infer` to ever return a lambda. I challenge anyone reading to prove me wrong on that-- if you can, that would likely yield some large insight. However, I believe it's good as-is.
+- I opt to not do the extra normalization in `inferUnv`/`inferPi`, which he would consider a mistake; however, as my system does substitution on the fly and has no "global definition" context; I don't believe it's possible for `infer` to ever return a lambda. I challenge anyone reading to prove me wrong on that-- if you can, that would likely yield some large insight. However, I doubt that is possible. :)
 - I implement the unit type and its constructor; `() : ()`.
 
 There are some significant similarities worth noting as well:
