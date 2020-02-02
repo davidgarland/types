@@ -278,7 +278,13 @@ doUnify (TVar x) t =
 
 **A ~ a**
 
-The rules for `a ~ A` and `A ~ a` are the same, so we just recurse.
+The rules for `a ~ A` and `A ~ a` are the same in our case, so we just recurse.
+
+I've seen some people write unification as always having the type variable on
+the left and outlawing things like `1 ~ a` as you can't make a substitution
+`1 := a`, but I think that's a fairly pointless distinction-- they usually
+end up writing the same thing during the constraint solving phase, which we
+don't have, so we can just do that here.
 
 ```Haskell
 doUnify t (TVar x) = doUnify (TVar x) t
