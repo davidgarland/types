@@ -1,8 +1,8 @@
 # The Untyped Lambda Calculus, For The Uninitiated
 
 Although most of the systems in this repository are focused on type systems,
-this system aims to teach how the untyped lambda calculus works, in order to
-demonstrate how one is defined, and to teach the following type-agnostic
+this system aims to teach how the untyped lambda calculus works, both in order to
+demonstrate how one is defined and to teach the following type-agnostic
 procedures and concepts:
 
 - Lambdas (duh)
