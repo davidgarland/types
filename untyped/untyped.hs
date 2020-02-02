@@ -1,6 +1,8 @@
 {-
   An example implementation of the untyped lambda calculus, as a sort of
   beginners' guide to the idea.
+
+  TODO: everything
 -}
 
 import qualified Data.Text as T
