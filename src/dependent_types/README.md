@@ -1,4 +1,5 @@
 # Dependent Types
+# NOTE: In need of a rewrite.
 
 ## Introduction
 

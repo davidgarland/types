@@ -3,7 +3,7 @@
 ## Introduction
 
 Compositional type checking is a unique style of type checking that treats
-existentials in a more "bottom-up" rather than "top-down" manner compared to
+constraints in a more "bottom-up" rather than "top-down" manner compared to
 the traditional methods. Instead of generating placeholder type variables as
 the tree is traversed downwards, compositional typings propagate a set of
 "constraints" upon the types of an expression upwards, which are then resolved.
@@ -425,7 +425,7 @@ The reason for this is fairly simple-- in our earlier example, the only reason
 `xform` had any impact on the type of `xs` was because it shared a type variable
 with it, namely `a`. If no such connection exists, then keeping that entry in
 the Δ-context only serves to make the typing "less polymorphic" and admit
-fewer perfectly programs.
+fewer perfectly valid programs.
 
 As for why we want to remove a specified term variable-- that is for the
 `let`-bound variable name, because we don't want that to be unified. The type
