@@ -126,7 +126,7 @@ This system is largely based on
 [this article](http://math.andrej.com/2012/11/08/how-to-implement-dependent-type-theory-i/)
 by Andrej Bauer; there are a few core differences to my implementation, however:
 
-- I use De Bruijn indices, which he gets around to doing in part II, but he decides uses "explicit substitutions"-- I just do it normally.
+- I use De Bruijn indices, which he gets around to doing in part II, but he decide to use "explicit substitutions"-- I just do it normally.
 - Beta-reduction is done "on the fly" as part of inference, rather than being its own function. In my opinion this makes things less error prone, and it also keeps the code much smaller.
 - I implement a cumulative universe heirarchy.
 - I implement dependent pairs, sigma types, and the fst/snd projections.
