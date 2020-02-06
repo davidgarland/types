@@ -28,7 +28,7 @@ In their system, they add one additional "primary" judgement:
 
 And three "supplementary" ones:
 
-- A subtyping relation `A <: B` that guarantees that A is "at least as polymorphic as" B-- for instance, the type `1 -> ∀a. a` is a subtype of `1 -> 1`. Another way to frame it is that if `A <: B`, then A can be passed into a function requiring B; under this analogy, `∀a. a` being passable as `1` but not vice versa makes it clear that `∀a. a <: 1`.
+- A subtyping relation `A <: B` that guarantees that A is "at least as polymorphic as" B-- for instance, the type `1 -> ∀a. a` is a subtype of `1 -> 1`. Another way to frame it is that if `A <: B`, then A can be passed into a function requiring B; under this analogy, `∀a. a` being passable as `1` makes it clear that `∀a. a <: 1`. The opposite is not true, because a function requiring `∀a. a` cannot have `1` passed in-- therefore `1 <: ∀a. a` is **false**, and would lead to a compile-time error.
 - A "left instantiation" rule that they use a fancy non-unicode symbol for-- I'll write it as `instL(∃a, A)`-- that instantiates the existential type variable `∃a` such that `∃a <: A`.
 - A "right instantiation" rule that they use a fancy non-unicode symbol for-- I'l write it as `instR(A, ∃a)`-- that instantiates the existential type variable `∃a` such that `A <: ∃a`.
 
