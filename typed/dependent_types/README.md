@@ -88,7 +88,7 @@ many.
 What this ends up looking like, for instance, is that you may write a function
 such as:
 
-```Haskell
+```
 id = λt: U₀. λx: t. x
 ```
 
