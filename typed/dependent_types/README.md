@@ -440,7 +440,7 @@ infer _ Unit = Right (One, Unit)
 
 The type of One is Universe 0, and beta-normalization is a no-op.
 
-```
+```Haskell
 infer _ One = Right (Unv 0, One)
 ```
 
