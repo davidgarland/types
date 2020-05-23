@@ -210,7 +210,7 @@ substRaw k w (Sgm (Abs x t e)) =
 substRaw k w (Fst e) = Fst (substRaw k w e)
 substRaw k w (Snd e) = Snd (substRaw k w e)
 substRaw _ _ Unit = Unit
-substRwa _ _ One = One
+substRaw _ _ One = One
 
 subst :: Exp -> Exp -> Exp
 subst = substRaw 0
