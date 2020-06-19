@@ -198,6 +198,10 @@ instance Substable Type where
   apply s (Fun a b) = Fun (apply s a) (apply s b)
   apply _ One = One
 
+instance Substable Subst where
+  apply s (Subst a) = Subst $ apply s <$> a
+  ftv (Subst a) = foldMap ftv a
+
 instance Substable Delta where
   apply s (Delta m) = Delta $ fmap (apply s) m
   ftv (Delta m) = foldMap ftv m
