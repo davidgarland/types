@@ -14,6 +14,8 @@ import Control.Monad.State
 import Control.Monad.Except
 import Data.Functor
 
+import Debug.Trace
+
 -- Core
 
 data Name
@@ -197,8 +199,8 @@ ctxApply (Fun a b) = Fun <$> ctxApply a <*> ctxApply b
 
 subtype :: Type -> Type -> Infer ()
 subtype One One = pure ()
-subtype (TVar a) (TVar a') | a == a' = ctxFind Poly a $> ()
-subtype (Exs a) (Exs a') | a == a' = ctxFind Exst a $> ()
+subtype (TVar a) (TVar a') | a == a' = ctxHas (TVar a)
+subtype (Exs a) (Exs a') | a == a' = ctxHas (Exs a)
 subtype (Fun a a') (Fun b b') =
   subtype b a >> (join $ subtype <$> ctxApply a' <*> ctxApply b')
 subtype (For x a) b = do
@@ -314,7 +316,7 @@ synth (OfTy e t) = ctxHas t >> check e t $> t
 infer :: Ctx -> Expr -> Either T.Text Type
 infer c e =
   let vs = ((flip Name $ 0) . T.pack) <$> ([1..] >>= flip replicateM ['a'..'z'])
-  in fst $ (runState . runExceptT $ synth e) (c, vs)
+  in fst $ (runState . runExceptT $ (ctxApply =<< synth e)) (c, vs)
 
 -- Examples
 
@@ -344,4 +346,5 @@ test n e = do
 
 main = do
   test "id" eid
+  test "id unit" (App eid Unit)
   test "poly id" (OfTy eid (For (name "'t") (Fun (tvar "'t") (tvar "'t"))))

@@ -28,7 +28,7 @@ In their system, they add one additional "primary" judgement:
 
 And three "supplementary" ones:
 
-- A subtyping relation `A <: B` that guarantees that A is "at least as polymorphic as" B-- for instance, the type `1 -> ∀a. a` is a subtype of `1 -> 1`. Another way to frame it is that if `A <: B`, then A can be passed into a function requiring B; under this analogy, `∀a. a` being passable as `1` makes it clear that `∀a. a <: 1`. The opposite is not true, because a function requiring `∀a. a` cannot have `1` passed in-- therefore `1 <: ∀a. a` is **false**, and would lead to a compile-time error.
+- A subtyping relation `A <: B` that guarantees that A is "at least as polymorphic as" B-- for instance, the type `1 -> ∀a. a` is a subtype of `1 -> 1`. Another way to frame it is that if `A <: B`, then A can be passed into a function requiring B; under this analogy, `∀a. a` being passable as `1` makes it clear that `(∀a. a) <: 1`. The opposite is not true, because a function requiring `∀a. a` cannot have `1` passed in-- therefore `1 <: ∀a. a` is **false**, and would lead to a compile-time error.
 - A "left instantiation" rule that they use a fancy non-unicode symbol for-- I'll write it as `instL(∃a, A)`-- that instantiates the existential type variable `∃a` such that `∃a <: A`.
 - A "right instantiation" rule that they use a fancy non-unicode symbol for-- I'l write it as `instR(A, ∃a)`-- that instantiates the existential type variable `∃a` such that `A <: ∃a`.
 
@@ -220,7 +220,7 @@ to the next typing rule. If so, we check that the name exists as a `Poly` entry 
 and then yield `()` if so. Otherwise, an error is thrown.
 
 ```Haskell
-subtype (TVar a) (TVar a') | a == a' = ctxFind Poly a $> ()
+subtype (TVar a) (TVar a') | a == a' = ctxHas (TVar a)
 ```
 
 **[<:Exvar]**
@@ -234,7 +234,7 @@ type variables:
 ```
 
 ```Haskell
-subtype (Exs a) (Exs a') | a == a' = ctxFind Exst a $> ()
+subtype (Exs a) (Exs a') | a == a' = ctxHas (Exs a)
 ```
 
 **[<:->]**
@@ -245,7 +245,7 @@ given `A -> A' <: B -> B'`, we perform the judgement `B <: A` for the domain, th
 
 However, it is in reality pretty simple to demonstrate. Beforehand, recall that `A <: B`
 (`A` is a subtype of `B` / `B` is a supertype of `A`) means that `A` is "at least as polymorphic as"
-`B`, or "can be passed to a function as" `B`. For instance, `∀a. a <: 1`.
+`B`, or "can be passed to a function as" `B`. For instance, `(∀a. a) <: 1`.
 
 So, given some function of type `(∀a. a -> 1) -> 1`, we wouldn't expect to be
 able to pass in `1 -> 1`. The way we prevent this kind of behaviour is to say that `B <: A`;
@@ -828,7 +828,7 @@ and an infinite stream of variable names `vs`.
 ```Haskell
 infer c e =
   let vs = ((flip Name $ 0) . T.pack) <$> ([1..] >>= flip replicateM ['a'..'z'])
-  in fst $ (runState . runExceptT $ synth e) (c, vs)
+  in fst $ (runState . runExceptT $ (ctxApply =<< synth e)) (c, vs)
 ```
 
 And with that, the system is complete, bar the supplementary "boring" functions that were
