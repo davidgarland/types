@@ -184,8 +184,8 @@ is:
 - We start with a counter that we have set at 0.
 - Whenever we come across an abstraction, we increment that counter by 1. The counter is not incremented when considering the type for the abstraction; only the body.
 - If an index is equal to our counter, we perform the substitution.
-- If an index is greater than our counter, we decrement it.
-- If an index is less than our counter, we leave it untouched.
+- If an index is greater than our counter, we decrement that index (to account for us having removed a layer of abstraction.)
+- If an index is less than our counter, we leave the index untouched.
 
 This way, indices are shifted to account for lambdas being removed, and of
 course we need no variable names.
