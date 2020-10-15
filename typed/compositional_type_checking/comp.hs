@@ -128,7 +128,7 @@ instance Substable Typing where
 
 compose :: Subst -> Subst -> Infer Subst
 compose a@(Subst ma) b@(Subst mb) =
-  Subst <$> (M.traverseMaybeWithKey try $ ma <> (apply a <$> mb))
+  Subst <$> (M.traverseMaybeWithKey try $ (apply a <$> mb) <> ma)
     where
       try k x | (TVar k) == x = pure Nothing
       try k x | k `S.member` ftv x = throwError "Attempt to create infinite substitution."
